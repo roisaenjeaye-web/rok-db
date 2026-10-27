@@ -21,8 +21,99 @@
             sessionStorage.removeItem('satset_scroll_pos');
         }
 
+        initMobileNavigation();
         initSatsetButtons();
     });
+
+    // Inisialisasi Tampilan Mobile Responsif (HP-Friendly)
+    function initMobileNavigation() {
+        // 1. Injeksi mobile.css jika belum ada
+        if (!document.getElementById('rok-mobile-css')) {
+            const link = document.createElement('link');
+            link.id = 'rok-mobile-css';
+            link.rel = 'stylesheet';
+            link.href = '/css/mobile.css';
+            document.head.appendChild(link);
+        }
+
+        const sidebar = document.querySelector('.sidebar');
+        if (!sidebar) return;
+
+        const path = window.location.pathname;
+
+        // 2. Buat Top Header Mobile jika belum ada
+        if (!document.querySelector('.mobile-header')) {
+            const header = document.createElement('div');
+            header.className = 'mobile-header';
+            header.innerHTML = `
+                <div class="brand m-0">
+                    <i class="bi bi-shield-shaded text-primary me-1"></i>RoK<span>Joki</span>
+                </div>
+                <button class="btn btn-sm text-white p-1 px-2 border-0" id="btnToggleMobileSidebar" type="button" aria-label="Toggle menu">
+                    <i class="bi bi-list fs-3"></i>
+                </button>
+            `;
+            document.body.insertBefore(header, document.body.firstChild);
+
+            header.querySelector('#btnToggleMobileSidebar').addEventListener('click', toggleSidebar);
+        }
+
+        // 3. Buat Backdrop untuk menutup sidebar
+        let backdrop = document.querySelector('.sidebar-backdrop');
+        if (!backdrop) {
+            backdrop = document.createElement('div');
+            backdrop.className = 'sidebar-backdrop d-none';
+            document.body.appendChild(backdrop);
+            backdrop.addEventListener('click', closeSidebar);
+        }
+
+        function toggleSidebar() {
+            const isOpen = sidebar.classList.contains('show');
+            if (isOpen) {
+                closeSidebar();
+            } else {
+                sidebar.classList.add('show');
+                backdrop.classList.remove('d-none');
+                document.body.style.overflow = 'hidden';
+            }
+        }
+
+        function closeSidebar() {
+            sidebar.classList.remove('show');
+            backdrop.classList.add('d-none');
+            document.body.style.overflow = '';
+        }
+
+        sidebar.querySelectorAll('a').forEach(a => {
+            a.addEventListener('click', closeSidebar);
+        });
+
+        // 4. Buat Bottom Navigation Bar (5 Menu Utama Joki)
+        if (!document.querySelector('.mobile-bottom-nav')) {
+            const bottomNav = document.createElement('div');
+            bottomNav.className = 'mobile-bottom-nav';
+
+            const items = [
+                { href: '/stok', icon: 'bi-box-seam', label: 'Stok' },
+                { href: '/kalkulator', icon: 'bi-calculator', label: 'Kalkulator' },
+                { href: '/jadwal', icon: 'bi-alarm', label: 'Jadwal' },
+                { href: '/akun', icon: 'bi-people', label: 'Akun' },
+                { href: '/riwayat', icon: 'bi-journal-text', label: 'Kas' }
+            ];
+
+            bottomNav.innerHTML = items.map(item => {
+                const isActive = (path === item.href) || (item.href === '/stok' && (path === '/' || path === ''));
+                return `
+                    <a href="${item.href}" class="${isActive ? 'active' : ''}">
+                        <i class="bi ${item.icon}"></i>
+                        <span>${item.label}</span>
+                    </a>
+                `;
+            }).join('');
+
+            document.body.appendChild(bottomNav);
+        }
+    }
 
     // Helper Toast Notification (Non-intrusive)
     function showSatsetToast(message, type = 'success') {

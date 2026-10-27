@@ -5,6 +5,8 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/cloudflared.exe
+/ngrok.exe
 /vendor
 .env
 .env.backup
