@@ -360,6 +360,14 @@
                         </table>
                     </div>
 
+                    <!-- Tombol Cepat: Salin Format WhatsApp -->
+                    <div class="mb-3">
+                        <button type="button" class="btn btn-success w-100 fw-bold py-2 shadow-sm d-flex align-items-center justify-content-center gap-2" onclick="copyWhatsAppFormat()">
+                            <i class="bi bi-whatsapp fs-5"></i>
+                            <span>Salin Format Chat WhatsApp (Siap Kirim)</span>
+                        </button>
+                    </div>
+
                     <!-- Form Opsional: Catat ke Buku Kas -->
                     @if($hasSessionResult && session('total_net') > 0)
                         <div class="card bg-light border p-3">

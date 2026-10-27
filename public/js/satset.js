@@ -22,6 +22,8 @@
         }
 
         initMobileNavigation();
+        initLiveCountdowns();
+        initKdFilters();
         initSatsetButtons();
     });
 
@@ -343,9 +345,180 @@
         });
     }
 
+    // 2. Real-time Ticking Countdown Timer (Otomatis update detik & unlock jika siap)
+    function initLiveCountdowns() {
+        const timerEls = document.querySelectorAll('[data-target-time]');
+        if (timerEls.length === 0) return;
+
+        function updateTimers() {
+            const now = Math.floor(Date.now() / 1000);
+
+            timerEls.forEach(el => {
+                const targetTime = parseInt(el.getAttribute('data-target-time'), 10);
+                if (!targetTime || targetTime <= 0) return;
+
+                const diff = targetTime - now;
+                if (diff <= 0) {
+                    el.innerHTML = '<span class="text-success fw-bold"><i class="bi bi-unlock-fill"></i> Semua Siap!</span>';
+                    el.classList.remove('text-warning');
+                    el.classList.add('text-success');
+
+                    // Update parent card if exists
+                    const cardWrapper = el.closest('.kd-card-wrapper');
+                    if (cardWrapper && cardWrapper.getAttribute('data-has-ready') !== 'true') {
+                        cardWrapper.setAttribute('data-has-ready', 'true');
+                        const badge = cardWrapper.querySelector('.kd-status-badge');
+                        if (badge) {
+                            badge.innerHTML = '<span class="badge bg-success"><i class="bi bi-unlock-fill"></i> Ready</span>';
+                        }
+                    }
+                } else {
+                    const hours = Math.floor(diff / 3600);
+                    const minutes = Math.floor((diff % 3600) / 60);
+                    const seconds = diff % 60;
+
+                    const hStr = hours > 0 ? `${hours}j ` : '';
+                    const mStr = `${minutes}m `;
+                    const sStr = `${seconds < 10 ? '0' : ''}${seconds}d`;
+
+                    el.innerHTML = `<i class="bi bi-stopwatch text-warning me-1"></i>Tunggu <b>${hStr}${mStr}${sStr}</b>`;
+                }
+            });
+        }
+
+        updateTimers();
+        setInterval(updateTimers, 1000);
+    }
+
+    // 3. Quick Filter & Search Bar untuk KD di Jadwal & Akun
+    function initKdFilters() {
+        const filterBtns = document.querySelectorAll('.btn-filter-kd');
+        const searchInput = document.getElementById('inputSearchKD');
+        const cards = document.querySelectorAll('.kd-card-wrapper');
+
+        if (cards.length === 0) return;
+
+        let activeFilter = 'all';
+        let searchQuery = '';
+
+        function applyFilters() {
+            cards.forEach(card => {
+                const kdNum = (card.getAttribute('data-kd') || '').toLowerCase();
+                const hasReady = card.getAttribute('data-has-ready') === 'true';
+
+                let matchFilter = true;
+                if (activeFilter === 'ready') {
+                    matchFilter = hasReady;
+                } else if (activeFilter === 'cooldown') {
+                    matchFilter = !hasReady;
+                }
+
+                let matchSearch = true;
+                if (searchQuery) {
+                    matchSearch = kdNum.includes(searchQuery);
+                }
+
+                if (matchFilter && matchSearch) {
+                    card.classList.remove('d-none');
+                } else {
+                    card.classList.add('d-none');
+                }
+            });
+        }
+
+        filterBtns.forEach(btn => {
+            btn.addEventListener('click', function () {
+                filterBtns.forEach(b => {
+                    b.classList.remove('active', 'btn-dark');
+                    b.classList.add('btn-outline-secondary');
+                });
+                this.classList.add('active', 'btn-dark');
+                this.classList.remove('btn-outline-secondary');
+
+                activeFilter = this.getAttribute('data-filter') || 'all';
+                applyFilters();
+            });
+        });
+
+        if (searchInput) {
+            searchInput.addEventListener('input', function () {
+                searchQuery = this.value.trim().toLowerCase().replace('#', '');
+                applyFilters();
+            });
+        }
+    }
+
+    // 4. Salin Format Pesanan WhatsApp Profesional (1-Click)
+    window.copyWhatsAppFormat = function () {
+        const kd = document.getElementById('input_kd') ? document.getElementById('input_kd').value.trim() : '';
+        const food = parseFloat(document.getElementById('input_food') ? document.getElementById('input_food').value : 0) || 0;
+        const wood = parseFloat(document.getElementById('input_wood') ? document.getElementById('input_wood').value : 0) || 0;
+        const stone = parseFloat(document.getElementById('input_stone') ? document.getElementById('input_stone').value : 0) || 0;
+        const gold = parseFloat(document.getElementById('input_gold') ? document.getElementById('input_gold').value : 0) || 0;
+        const tax = parseFloat(document.getElementById('input_tax') ? document.getElementById('input_tax').value : 0) || 8;
+        const pricePerM = parseFloat(document.getElementById('input_price') ? document.getElementById('input_price').value : 0) || 0;
+
+        const totalGross = food + wood + stone + gold;
+        if (totalGross <= 0) {
+            showSatsetToast('Silakan isi jumlah RSS terlebih dahulu di kalkulator!', 'danger');
+            return;
+        }
+
+        const isDeduct = document.getElementById('mode_deduct') ? document.getElementById('mode_deduct').checked : true;
+        let totalNet = 0;
+        let taxAmount = 0;
+
+        if (isDeduct) {
+            taxAmount = totalGross * (tax / 100);
+            totalNet = totalGross - taxAmount;
+        } else {
+            const taxFactor = (1 - (tax / 100));
+            const neededGross = taxFactor > 0 ? (totalGross / taxFactor) : totalGross;
+            taxAmount = neededGross - totalGross;
+            totalNet = totalGross;
+        }
+
+        const totalPrice = pricePerM > 0 ? Math.round(totalNet * pricePerM) : 0;
+
+        let rssList = [];
+        if (food > 0) rssList.push(`  🌽 Food: ${food.toFixed(2)}M`);
+        if (wood > 0) rssList.push(`  🪵 Wood: ${wood.toFixed(2)}M`);
+        if (stone > 0) rssList.push(`  🪨 Stone: ${stone.toFixed(2)}M`);
+        if (gold > 0) rssList.push(`  🪙 Gold: ${gold.toFixed(2)}M`);
+
+        let text = `👑 *DETAIL PESANAN RSS RoK* 👑\n`;
+        text += `-----------------------------------\n`;
+        if (kd) text += `📍 *Kingdom*: #${kd}\n`;
+        text += `📦 *Rincian RSS*:\n${rssList.join('\n')}\n`;
+        text += `-----------------------------------\n`;
+        text += `📊 *Total Kirim*: ${isDeduct ? totalGross.toFixed(2) : (totalGross + taxAmount).toFixed(2)}M\n`;
+        text += `🛡️ *Pajak TP*: ${tax}%\n`;
+        text += `✅ *Bersih Diterima*: ${totalNet.toFixed(2)}M\n`;
+        if (totalPrice > 0) {
+            text += `💰 *Total Biaya*: Rp ${totalPrice.toLocaleString('id-ID')}\n`;
+        }
+        text += `-----------------------------------\n`;
+        text += `🚀 *Status*: Siap Kirim / Diproses\n`;
+        text += `Terima kasih sudah order! 🙏`;
+
+        navigator.clipboard.writeText(text).then(() => {
+            showSatsetToast('✅ Format WhatsApp berhasil disalin! Tinggal tempel (paste) di chat pembeli.', 'success');
+        }).catch(() => {
+            // Fallback manual copy
+            const textarea = document.createElement('textarea');
+            textarea.value = text;
+            document.body.appendChild(textarea);
+            textarea.select();
+            document.execCommand('copy');
+            document.body.removeChild(textarea);
+            showSatsetToast('✅ Format WhatsApp disalin ke clipboard!', 'success');
+        });
+    };
+
     // Ekspor helper global jika dipanggil manual
     window.Satset = {
         toast: showSatsetToast,
+        copyWA: window.copyWhatsAppFormat,
         refresh: function () {
             sessionStorage.setItem('satset_scroll_pos', window.scrollY);
             window.location.reload();

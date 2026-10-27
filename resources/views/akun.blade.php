@@ -189,17 +189,19 @@
                         $accountsInKd = $kdChars->groupBy('game_account_id');
                     @endphp
 
-                    <div class="col-md-6 mb-2">
+                    <div class="col-md-6 mb-2 kd-card-wrapper" data-kd="{{ $kd }}" data-has-ready="{{ $readyCount > 0 ? 'true' : 'false' }}">
                         <div class="card h-100 border-top border-4 {{ $readyCount > 0 ? 'border-danger' : 'border-secondary' }} shadow-sm">
                             <div class="card-header d-flex justify-content-between align-items-center bg-light py-2">
                                 <h5 class="m-0 fw-bold {{ $readyCount > 0 ? 'text-danger' : 'text-secondary' }}">
                                     <i class="bi bi-geo-alt-fill"></i> KD #{{ $kd }}
                                 </h5>
-                                @if($readyCount == 0)
-                                    <span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> All Cooldown</span>
-                                @else
-                                    <span class="badge bg-success"><i class="bi bi-unlock-fill"></i> Ready</span>
-                                @endif
+                                <div class="kd-status-badge">
+                                    @if($readyCount == 0)
+                                        <span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> All Cooldown</span>
+                                    @else
+                                        <span class="badge bg-success"><i class="bi bi-unlock-fill"></i> Ready</span>
+                                    @endif
+                                </div>
                             </div>
                             
                             <div class="card-body d-flex flex-column p-3">
@@ -215,7 +217,7 @@
                                 
                                 <div class="d-flex justify-content-between align-items-center mb-3">
                                     <span class="text-muted small fw-bold"><i class="bi bi-stopwatch-fill text-warning"></i> JEDA TERLAMA</span>
-                                    <span class="fw-bold fs-6 {{ $cooldownText ? 'text-warning' : 'text-success' }}">
+                                    <span class="fw-bold fs-6 {{ $cooldownText ? 'text-warning' : 'text-success' }}" data-target-time="{{ $maxCooldownEnd ? $maxCooldownEnd->timestamp : 0 }}">
                                         {{ $cooldownText ? 'Tunggu ' . $cooldownText : 'Semua Siap!' }}
                                     </span>
                                 </div>

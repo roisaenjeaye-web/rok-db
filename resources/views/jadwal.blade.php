@@ -100,6 +100,29 @@
         </div>
     @endif
 
+    <!-- Filter & Pencarian Cepat KD (Satset) -->
+    <div class="card bg-white border-0 shadow-sm mb-3">
+        <div class="card-body p-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <div class="d-flex align-items-center gap-1 overflow-auto py-1" style="white-space: nowrap;">
+                <button type="button" class="btn btn-sm btn-dark rounded-pill px-3 py-1 btn-filter-kd active" data-filter="all" style="font-size: 12px;">
+                    <i class="bi bi-grid-fill me-1"></i> Semua ({{ count($groupedByKD) }})
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-danger rounded-pill px-3 py-1 btn-filter-kd" data-filter="ready" style="font-size: 12px;">
+                    <i class="bi bi-lightning-charge-fill me-1"></i> Siap Panen Saja
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 py-1 btn-filter-kd" data-filter="cooldown" style="font-size: 12px;">
+                    <i class="bi bi-clock-history me-1"></i> Sedang Cooldown
+                </button>
+            </div>
+            <div class="ms-auto" style="min-width: 130px; max-width: 200px;">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="inputSearchKD" class="form-control border-start-0" placeholder="Cari KD #...">
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="row">
         @forelse ($groupedByKD as $kd => $chars)
             @php
@@ -138,17 +161,19 @@
                 $otherStats = $kdStatList->whereNotIn('worker_name', ['Rois', 'Therta']);
             @endphp
 
-            <div class="col-xl-4 col-lg-6 mb-4">
+            <div class="col-xl-4 col-lg-6 mb-4 kd-card-wrapper" data-kd="{{ $kd }}" data-has-ready="{{ $readyCount > 0 ? 'true' : 'false' }}">
                 <div class="card h-100 border-top border-4 {{ $readyCount > 0 ? 'border-danger' : 'border-secondary' }}">
                     <div class="card-header d-flex justify-content-between align-items-center bg-light">
                         <h5 class="m-0 fw-bold {{ $readyCount > 0 ? 'text-danger' : 'text-secondary' }}">
                             <i class="bi bi-geo-alt-fill"></i> KD #{{ $kd }}
                         </h5>
-                        @if($readyCount == 0)
-                            <span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> All Cooldown</span>
-                        @else
-                            <span class="badge bg-success"><i class="bi bi-unlock-fill"></i> Ready</span>
-                        @endif
+                        <div class="kd-status-badge">
+                            @if($readyCount == 0)
+                                <span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> All Cooldown</span>
+                            @else
+                                <span class="badge bg-success"><i class="bi bi-unlock-fill"></i> Ready</span>
+                            @endif
+                        </div>
                     </div>
                     
                     <div class="card-body">
@@ -164,7 +189,7 @@
                         
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <span class="text-muted small fw-bold"><i class="bi bi-stopwatch-fill text-warning"></i> JEDA TERLAMA</span>
-                            <span class="fw-bold fs-6 {{ $cooldownText ? 'text-warning' : 'text-success' }}">
+                            <span class="fw-bold fs-6 {{ $cooldownText ? 'text-warning' : 'text-success' }}" data-target-time="{{ $maxCooldownEnd ? $maxCooldownEnd->timestamp : 0 }}">
                                 {{ $cooldownText ? 'Tunggu ' . $cooldownText : 'Semua Siap!' }}
                             </span>
                         </div>
