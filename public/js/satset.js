@@ -25,6 +25,7 @@
         initLiveCountdowns();
         initKdFilters();
         initSatsetButtons();
+        initWhatsAppReminders();
     });
 
     // Inisialisasi Tampilan Mobile Responsif (HP-Friendly)
@@ -186,7 +187,8 @@
 
                 try {
                     const formData = new FormData(form);
-                    const response = await fetch(form.action, {
+                    const targetUrl = form.getAttribute('action') || (typeof form.action === 'string' ? form.action : form.attributes.action.value);
+                    const response = await fetch(targetUrl, {
                         method: 'POST',
                         body: formData,
                         headers: {
@@ -220,8 +222,8 @@
                         showSatsetToast(data.message || 'Gagal memproses permintaan', 'danger');
                     }
                 } catch (err) {
-                    // Fallback jika fetch bermasalah: submit form secara normal
-                    form.submit();
+                    // Fallback jika fetch bermasalah: submit form secara normal tanpa bentrok DOM
+                    HTMLFormElement.prototype.submit.call(form);
                     return;
                 } finally {
                     if (btn) {
@@ -250,7 +252,8 @@
 
                 try {
                     const formData = new FormData(form);
-                    const response = await fetch(form.action, {
+                    const targetUrl = form.getAttribute('action') || (typeof form.action === 'string' ? form.action : form.attributes.action.value);
+                    const response = await fetch(targetUrl, {
                         method: 'POST',
                         body: formData,
                         headers: {
@@ -274,13 +277,59 @@
                         }
                     }
                 } catch (err) {
-                    form.submit();
+                    HTMLFormElement.prototype.submit.call(form);
+                }
+            });
+        });
+
+        // B2. Intercept Form Atur Jeda Macul (/jadwal/kd/{kd}/set-cooldown)
+        document.querySelectorAll('form[action*="/set-cooldown"]').forEach(form => {
+            if (form.dataset.satsetBound) return;
+            form.dataset.satsetBound = 'true';
+
+            form.addEventListener('submit', async function (e) {
+                e.preventDefault();
+                const btn = form.querySelector('button[type="submit"]');
+                const originalHtml = btn ? btn.innerHTML : '';
+                if (btn) {
+                    btn.classList.add('btn-satset-loading');
+                    btn.disabled = true;
+                    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Menyimpan...';
+                }
+
+                try {
+                    const formData = new FormData(form);
+                    const targetUrl = form.getAttribute('action') || (typeof form.action === 'string' ? form.action : form.attributes.action.value);
+                    const response = await fetch(targetUrl, {
+                        method: 'POST',
+                        body: formData,
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'Accept': 'application/json'
+                        }
+                    });
+
+                    const data = await response.json();
+                    if (response.ok && data.success) {
+                        showSatsetToast(data.message, 'success');
+                        sessionStorage.setItem('satset_scroll_pos', window.scrollY);
+                        window.location.reload();
+                    } else {
+                        showSatsetToast(data.message || 'Gagal menyimpan jeda', 'danger');
+                        if (btn) {
+                            btn.classList.remove('btn-satset-loading');
+                            btn.innerHTML = originalHtml;
+                            btn.disabled = false;
+                        }
+                    }
+                } catch (err) {
+                    HTMLFormElement.prototype.submit.call(form);
                 }
             });
         });
 
         // C. Intercept Tombol "Selesai" Char (/akun/char/{id}/farm dan /akun/char-bulk/farm)
-        document.querySelectorAll('form[action*="/akun/char"]').forEach(form => {
+        document.querySelectorAll('form[action*="/akun/char/"][action*="/farm"], form[action*="/akun/char-bulk/farm"]').forEach(form => {
             if (form.dataset.satsetBound) return;
             form.dataset.satsetBound = 'true';
 
@@ -296,7 +345,8 @@
 
                 try {
                     const formData = new FormData(form);
-                    const response = await fetch(form.action, {
+                    const targetUrl = form.getAttribute('action') || (typeof form.action === 'string' ? form.action : form.attributes.action.value);
+                    const response = await fetch(targetUrl, {
                         method: 'POST',
                         body: formData,
                         headers: {
@@ -320,7 +370,7 @@
                         }
                     }
                 } catch (err) {
-                    form.submit();
+                    HTMLFormElement.prototype.submit.call(form);
                 }
             });
         });
@@ -329,10 +379,16 @@
         document.querySelectorAll('form').forEach(form => {
             if (form.dataset.satsetBound) return;
             // Abaikan form logout atau kalkulator realtime
-            if (form.getAttribute('action') === '/logout' || form.getAttribute('action') === '/kalkulator') return;
+            const action = form.getAttribute('action') || '';
+            if (action === '/logout' || action.includes('/kalkulator')) return;
 
             form.dataset.satsetBound = 'true';
             form.addEventListener('submit', function () {
+                // Jangan disable jika validasi form HTML5 belum lengkap
+                if (form.checkValidity && !form.checkValidity()) {
+                    return;
+                }
+
                 const btn = form.querySelector('button[type="submit"]');
                 if (btn && !btn.classList.contains('btn-satset-loading')) {
                     btn.classList.add('btn-satset-loading');
@@ -372,7 +428,20 @@
                             badge.innerHTML = '<span class="badge bg-success"><i class="bi bi-unlock-fill"></i> Ready</span>';
                         }
                     }
+
+                    // Alert toast jika timer baru saja selesai di browser yang aktif
+                    if (el.dataset.wasCountdown === 'true' && !el.dataset.hasAlerted) {
+                        el.dataset.hasAlerted = 'true';
+                        const kd = cardWrapper ? cardWrapper.getAttribute('data-kd') : '';
+                        if (kd) {
+                            showSatsetToast(`🔔 <b>KD #${kd} SUDAH SIAP PANEN!</b> <button type="button" class="btn btn-xs btn-success rounded-pill ms-2 text-white fw-bold px-2" onclick="window.Satset.sendSingleKdWA('${kd}')"><i class="bi bi-whatsapp"></i> WA</button>`, 'success');
+                            if (window.SatsetTriggerHeartbeat) {
+                                window.SatsetTriggerHeartbeat();
+                            }
+                        }
+                    }
                 } else {
+                    el.dataset.wasCountdown = 'true';
                     const hours = Math.floor(diff / 3600);
                     const minutes = Math.floor((diff % 3600) / 60);
                     const seconds = diff % 60;
@@ -515,10 +584,604 @@
         });
     };
 
+    // 5. Fitur Pengingat WhatsApp Direct (Satset)
+    function sendDirectWhatsApp(message, targetPhone = null) {
+        let phone = targetPhone !== null ? targetPhone : (localStorage.getItem('rok_wa_phone') || '');
+        let cleanPhone = phone.replace(/[^0-9]/g, '');
+        if (cleanPhone.startsWith('08')) {
+            cleanPhone = '628' + cleanPhone.substring(2);
+        }
+
+        const waUrl = cleanPhone
+            ? `https://api.whatsapp.com/send?phone=${cleanPhone}&text=${encodeURIComponent(message)}`
+            : `https://api.whatsapp.com/send?text=${encodeURIComponent(message)}`;
+
+        window.open(waUrl, '_blank');
+    }
+
+    function getDashboardPublicUrl() {
+        if (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')) {
+            return 'https://tint-cherub-polo.ngrok-free.dev/jadwal';
+        }
+        return window.location.origin + '/jadwal';
+    }
+
+    function formatSingleKdWaMessage(kd, readyCount, totalChars, targetTime, cooldownHours, workerName) {
+        const nowSec = Math.floor(Date.now() / 1000);
+        const isReady = (!targetTime || targetTime <= nowSec || readyCount > 0);
+        const currentUrl = getDashboardPublicUrl();
+        const cdNum = parseFloat(cooldownHours) || 4;
+        const cdStr = Number.isInteger(cdNum) ? cdNum : cdNum.toFixed(1);
+
+        let text = '';
+        if (isReady) {
+            text += `🚨 *PANGGILAN PANEN FARM RoK* 🚨\n`;
+            text += `━━━━━━━━━━━━━━━━━\n`;
+            text += `🏰 *Kingdom:* KD #${kd}\n`;
+            text += `✅ *Status:* SUDAH SIAP PANEN!\n`;
+            text += `👥 *Total Char:* ${readyCount || totalChars} Char Siap\n`;
+            text += `⏱️ *Siklus:* Tiap ${cdStr} Jam\n`;
+            text += `@all\n`;
+            text += `━━━━━━━━━━━━━━━━━\n`;
+            text += `🔗 *Buka Dashboard:* ${currentUrl}\n`;
+            text += `_Pesan otomatis dari Bot RoK Joki. Yuk gas macul sekarang!_ 🌾🚜`;
+        } else {
+            const diff = targetTime - nowSec;
+            const hours = Math.floor(diff / 3600);
+            const minutes = Math.floor((diff % 3600) / 60);
+            const sisaStr = (hours > 0 ? `${hours} Jam ` : '') + `${minutes} Menit`;
+
+            const targetDate = new Date(targetTime * 1000);
+            const jamSelesai = targetDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' }) + ' WIB';
+
+            text += `🔔 *PENGINGAT JADWAL FARM RoK* 🔔\n`;
+            text += `━━━━━━━━━━━━━━━━━\n`;
+            text += `🏰 *Kingdom:* KD #${kd}\n`;
+            text += `⏳ *Status:* Sedang Masa Jeda (Cooldown)\n`;
+            text += `⏱️ *Sisa Waktu:* ${sisaStr} lagi\n`;
+            text += `🎯 *Estimasi Siap:* pk ${jamSelesai}\n`;
+            text += `👥 *Target Char:* ${totalChars} Char\n`;
+            text += `⏱️ *Siklus:* Tiap ${cdStr} Jam\n`;
+            text += `@all\n`;
+            text += `━━━━━━━━━━━━━━━━━\n`;
+            text += `🔗 *Buka Dashboard:* ${currentUrl}\n`;
+            text += `_Pesan dari Bot RoK Joki. Set alarm jam ${jamSelesai}!_ ⏰`;
+        }
+        return text;
+    }
+
+    function formatAllKdWaMessage() {
+        const cards = document.querySelectorAll('.kd-card-wrapper');
+        const nowSec = Math.floor(Date.now() / 1000);
+        const nowStr = new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) + ' WIB';
+        const currentUrl = getDashboardPublicUrl();
+        
+        let readyList = [];
+        let cooldownList = [];
+
+        cards.forEach(card => {
+            const kd = card.getAttribute('data-kd');
+            const btnWa = card.querySelector('.btn-wa-single-kd');
+            let ready = 0;
+            let total = 0;
+            let targetTime = 0;
+
+            if (btnWa) {
+                ready = parseInt(btnWa.getAttribute('data-ready'), 10) || 0;
+                total = parseInt(btnWa.getAttribute('data-total'), 10) || 0;
+                targetTime = parseInt(btnWa.getAttribute('data-target-time'), 10) || 0;
+            }
+
+            const isReady = (!targetTime || targetTime <= nowSec || ready > 0);
+            if (isReady) {
+                readyList.push(`• *KD #${kd}*: ${ready || total} Char Siap Panen!`);
+            } else {
+                const diff = targetTime - nowSec;
+                const hours = Math.floor(diff / 3600);
+                const minutes = Math.floor((diff % 3600) / 60);
+                const sisaStr = (hours > 0 ? `${hours}j ` : '') + `${minutes}m`;
+                const targetDate = new Date(targetTime * 1000);
+                const jamSelesai = targetDate.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+                cooldownList.push(`• *KD #${kd}*: Tunggu ${sisaStr} (pk ${jamSelesai})`);
+            }
+        });
+
+        let text = `📋 *REKAP PENGINGAT JADWAL FARM RoK* 📋\n`;
+        text += `🗓️ *Waktu:* ${nowStr}\n`;
+        text += `━━━━━━━━━━━━━━━━━\n\n`;
+
+        if (readyList.length > 0) {
+            text += `🟢 *SIAP PANEN (READY - ${readyList.length} KD):*\n`;
+            text += readyList.join('\n') + `\n\n`;
+        } else {
+            text += `🟢 *SIAP PANEN:* (Semua KD sedang masa jeda)\n\n`;
+        }
+
+        if (cooldownList.length > 0) {
+            text += `⏳ *SEDANG JEDA (COOLDOWN - ${cooldownList.length} KD):*\n`;
+            text += cooldownList.join('\n') + `\n\n`;
+        }
+
+        text += `@all\n`;
+        text += `━━━━━━━━━━━━━━━━━\n`;
+        text += `🔗 *Buka Dashboard:* ${currentUrl}\n`;
+        text += `_Update langsung dari RoK Joki Admin Satset!_ 🌾🚜`;
+
+        return text;
+    }
+
+    function getCsrfToken() {
+        return document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') ||
+               document.querySelector('input[name="_token"]')?.value || '';
+    }
+
+    function initWhatsAppReminders() {
+        // A. Handle tombol Manual WA per KD (buka chat WA langsung)
+        document.querySelectorAll('.btn-wa-single-kd').forEach(btn => {
+            if (btn.dataset.waBound) return;
+            btn.dataset.waBound = 'true';
+
+            btn.addEventListener('click', function (e) {
+                e.preventDefault();
+                const kd = btn.getAttribute('data-kd');
+                const ready = parseInt(btn.getAttribute('data-ready'), 10) || 0;
+                const total = parseInt(btn.getAttribute('data-total'), 10) || 0;
+                const targetTime = parseInt(btn.getAttribute('data-target-time'), 10) || 0;
+                const cooldownHours = btn.getAttribute('data-cooldown-hours') || '4.0';
+                const worker = btn.getAttribute('data-worker') || 'Rois';
+
+                const msg = formatSingleKdWaMessage(kd, ready, total, targetTime, cooldownHours, worker);
+                sendDirectWhatsApp(msg);
+                showSatsetToast(`✅ Membuka WhatsApp Pengingat KD #${kd}...`, 'success');
+            });
+        });
+
+        // B. Handle tombol 1-Click Bot WA per KD (Kirim via Bot Fonnte tanpa buka WA)
+        document.querySelectorAll('.btn-bot-notify-kd').forEach(btn => {
+            if (btn.dataset.botBound) return;
+            btn.dataset.botBound = 'true';
+
+            btn.addEventListener('click', async function (e) {
+                e.preventDefault();
+                const kd = btn.getAttribute('data-kd');
+                const originalHtml = btn.innerHTML;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width: 12px; height: 12px;"></span>';
+                btn.disabled = true;
+
+                try {
+                    const res = await fetch(`/bot/notify-kd/${kd}`, {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': getCsrfToken(),
+                            'Accept': 'application/json'
+                        }
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showSatsetToast(`🤖 <b>Sukses!</b> Pengingat KD #${kd} otomatis terkirim via Bot WA!`, 'success');
+                    } else {
+                        showSatsetToast(data.message || 'Gagal mengirim via Bot WA', 'danger');
+                        // Jika token belum diset, buka modal setting
+                        if (data.message && data.message.includes('Token')) {
+                            const modalEl = document.getElementById('modalSettingWA');
+                            if (modalEl && window.bootstrap) new bootstrap.Modal(modalEl).show();
+                        }
+                    }
+                } catch (err) {
+                    showSatsetToast('Gagal menghubungi server bot', 'danger');
+                } finally {
+                    btn.innerHTML = originalHtml;
+                    btn.disabled = false;
+                }
+            });
+        });
+
+        // C. Handle tombol Rekap Manual WA di Header
+        const btnShareAll = document.getElementById('btnShareAllWA');
+        if (btnShareAll && !btnShareAll.dataset.waBound) {
+            btnShareAll.dataset.waBound = 'true';
+            btnShareAll.addEventListener('click', function () {
+                const msg = formatAllKdWaMessage();
+                sendDirectWhatsApp(msg);
+                showSatsetToast('✅ Membuka WhatsApp Rekap Semua KD...', 'success');
+            });
+        }
+
+        // D. Handle tombol Rekap Bot WA Otomatis di Header
+        const btnBotShareAll = document.getElementById('btnBotShareAll');
+        if (btnBotShareAll && !btnBotShareAll.dataset.botBound) {
+            btnBotShareAll.dataset.botBound = 'true';
+            btnBotShareAll.addEventListener('click', async function () {
+                const originalHtml = btnBotShareAll.innerHTML;
+                btnBotShareAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Mengirim...';
+                btnBotShareAll.disabled = true;
+
+                try {
+                    const res = await fetch('/bot/notify-all', {
+                        method: 'POST',
+                        headers: {
+                            'X-Requested-With': 'XMLHttpRequest',
+                            'X-CSRF-TOKEN': getCsrfToken(),
+                            'Accept': 'application/json'
+                        }
+                    });
+                    const data = await res.json();
+                    if (res.ok && data.success) {
+                        showSatsetToast('🤖 <b>Sukses!</b> Rekap semua KD berhasil dikirim otomatis oleh Bot WA Fonnte!', 'success');
+                    } else {
+                        showSatsetToast(data.message || 'Gagal mengirim rekap bot', 'danger');
+                    }
+                } catch (err) {
+                    showSatsetToast('Gagal menghubungi server bot', 'danger');
+                } finally {
+                    btnBotShareAll.innerHTML = originalHtml;
+                    btnBotShareAll.disabled = false;
+                }
+            });
+        }
+
+        // E. Handle Modal Pengaturan Bot WhatsApp (Fonnte API)
+        const modalEl = document.getElementById('modalSettingWA');
+        if (modalEl) {
+            const inputToken = document.getElementById('inputFonnteToken');
+            const inputPhone = document.getElementById('inputSettingWAPhone');
+            const checkAuto = document.getElementById('checkAutoNotify');
+            const badgeStatus = document.getElementById('badgeDeviceStatus');
+            const btnToggleEye = document.getElementById('btnToggleTokenVisibility');
+            const btnSave = document.getElementById('btnSaveBotSettings');
+            const btnTestSend = document.getElementById('btnTestBotSend');
+            const btnTestConn = document.getElementById('btnTestDeviceConn');
+            const inputWebhook = document.getElementById('inputWebhookUrl');
+            const btnCopyWebhook = document.getElementById('btnCopyWebhookUrl');
+
+            if (btnCopyWebhook && inputWebhook) {
+                btnCopyWebhook.addEventListener('click', function () {
+                    const urlVal = inputWebhook.value;
+                    if (navigator.clipboard && navigator.clipboard.writeText) {
+                        navigator.clipboard.writeText(urlVal).then(() => {
+                            showSatsetToast('📋 <b>URL Webhook disalin!</b> Tempel di dashboard Fonnte menu Webhook.', 'success');
+                        }).catch(() => {
+                            inputWebhook.select();
+                            document.execCommand('copy');
+                            showSatsetToast('📋 <b>URL Webhook disalin!</b>', 'success');
+                        });
+                    } else {
+                        inputWebhook.select();
+                        document.execCommand('copy');
+                        showSatsetToast('📋 <b>URL Webhook disalin!</b>', 'success');
+                    }
+                });
+            }
+
+            async function loadBotSettings() {
+                try {
+                    const res = await fetch('/bot/settings', {
+                        headers: { 'Accept': 'application/json' }
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        if (inputToken) inputToken.value = data.fonnte_token || '';
+                        if (inputPhone) inputPhone.value = data.target_phone || '';
+                        if (checkAuto) checkAuto.checked = !!data.is_auto_notify;
+                        if (inputWebhook && data.webhook_url) inputWebhook.value = data.webhook_url;
+
+                        if (data.target_phone) {
+                            localStorage.setItem('rok_wa_phone', data.target_phone);
+                        }
+
+                        if (data.fonnte_token) {
+                            checkDeviceStatusDirect(data.fonnte_token);
+                        }
+                    }
+                } catch (e) {
+                    console.log('Load bot settings error', e);
+                }
+            }
+
+            async function checkDeviceStatusDirect(tokenVal) {
+                if (!badgeStatus) return;
+                badgeStatus.className = 'badge bg-warning text-dark';
+                badgeStatus.textContent = 'Mengecek...';
+
+                try {
+                    const res = await fetch('/bot/test-connection', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': getCsrfToken(),
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({ fonnte_token: tokenVal })
+                    });
+                    const data = await res.json();
+                    if (data.success) {
+                        badgeStatus.className = 'badge bg-success';
+                        badgeStatus.innerHTML = `<i class="bi bi-check-circle-fill"></i> Terhubung (${data.name || data.device || 'WA'})`;
+                    } else {
+                        badgeStatus.className = 'badge bg-danger';
+                        badgeStatus.textContent = 'Belum Terhubung';
+                    }
+                } catch (e) {
+                    badgeStatus.className = 'badge bg-secondary';
+                    badgeStatus.textContent = 'Offline';
+                }
+            }
+
+            modalEl.addEventListener('show.bs.modal', loadBotSettings);
+
+            if (btnToggleEye && inputToken) {
+                btnToggleEye.addEventListener('click', function () {
+                    const isPass = inputToken.type === 'password';
+                    inputToken.type = isPass ? 'text' : 'password';
+                    btnToggleEye.innerHTML = isPass ? '<i class="bi bi-eye-slash"></i>' : '<i class="bi bi-eye"></i>';
+                });
+            }
+
+            if (btnSave) {
+                btnSave.addEventListener('click', async function () {
+                    const tokenVal = inputToken ? inputToken.value.trim() : '';
+                    const phoneVal = inputPhone ? inputPhone.value.trim() : '';
+                    const isAutoVal = checkAuto ? checkAuto.checked : true;
+
+                    btnSave.disabled = true;
+                    btnSave.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
+
+                    try {
+                        const res = await fetch('/bot/settings', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': getCsrfToken(),
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                fonnte_token: tokenVal,
+                                target_phone: phoneVal,
+                                is_auto_notify: isAutoVal
+                            })
+                        });
+                        const data = await res.json();
+                        if (data.success) {
+                            if (phoneVal) localStorage.setItem('rok_wa_phone', phoneVal);
+                            showSatsetToast('✅ Pengaturan Bot WhatsApp Fonnte berhasil disimpan!', 'success');
+                            if (tokenVal) checkDeviceStatusDirect(tokenVal);
+                        } else {
+                            showSatsetToast(data.message || 'Gagal menyimpan pengaturan bot', 'danger');
+                        }
+                    } catch (e) {
+                        showSatsetToast('Gagal menghubungi server', 'danger');
+                    } finally {
+                        btnSave.disabled = false;
+                        btnSave.innerHTML = '<i class="bi bi-save me-1"></i> Simpan Pengaturan Bot';
+                    }
+                });
+            }
+
+            if (btnTestConn) {
+                btnTestConn.addEventListener('click', function () {
+                    const tokenVal = inputToken ? inputToken.value.trim() : '';
+                    if (!tokenVal) {
+                        showSatsetToast('Silakan isi Token Fonnte terlebih dahulu!', 'danger');
+                        return;
+                    }
+                    checkDeviceStatusDirect(tokenVal);
+                });
+            }
+
+            const btnFetchGroups = document.getElementById('btnFetchWAGroups');
+            const containerGroupList = document.getElementById('containerGroupList');
+            const groupListItems = document.getElementById('groupListItems');
+            const btnCloseGroupList = document.getElementById('btnCloseGroupList');
+
+            if (btnCloseGroupList && containerGroupList) {
+                btnCloseGroupList.addEventListener('click', () => {
+                    containerGroupList.classList.add('d-none');
+                });
+            }
+
+            if (btnFetchGroups) {
+                btnFetchGroups.addEventListener('click', async function () {
+                    const tokenVal = inputToken ? inputToken.value.trim() : '';
+                    if (!tokenVal) {
+                        showSatsetToast('Silakan isi Token Fonnte terlebih dahulu!', 'danger');
+                        return;
+                    }
+
+                    const origHtml = btnFetchGroups.innerHTML;
+                    btnFetchGroups.disabled = true;
+                    btnFetchGroups.innerHTML = '<span class="spinner-border spinner-border-sm" style="width: 10px; height: 10px;"></span> Memuat...';
+
+                    try {
+                        const res = await fetch('/bot/get-groups', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': getCsrfToken(),
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({ fonnte_token: tokenVal })
+                        });
+                        const data = await res.json();
+
+                        if (res.ok && data.success && data.groups && data.groups.length > 0) {
+                            if (groupListItems) {
+                                groupListItems.innerHTML = '';
+                                data.groups.forEach(g => {
+                                    const row = document.createElement('div');
+                                    row.className = 'd-flex justify-content-between align-items-center p-1 bg-white border rounded';
+                                    row.style.cursor = 'pointer';
+                                    row.innerHTML = `
+                                        <div class="overflow-hidden me-2" style="max-width: 75%;">
+                                            <div class="fw-bold text-dark text-truncate" style="font-size: 11px;">${g.name || 'Grup Tanpa Nama'}</div>
+                                            <div class="text-muted" style="font-size: 9px; font-family: monospace;">${g.id}</div>
+                                        </div>
+                                        <button type="button" class="btn btn-xs btn-outline-success py-0 px-2 fw-bold" style="font-size: 10px;">Pilih</button>
+                                    `;
+                                    row.addEventListener('click', () => {
+                                        if (inputPhone) {
+                                            inputPhone.value = g.id;
+                                            showSatsetToast(`✅ ID Grup "${g.name}" terpilih! Klik "Simpan Pengaturan Bot".`, 'success');
+                                            if (containerGroupList) containerGroupList.classList.add('d-none');
+                                        }
+                                    });
+                                    groupListItems.appendChild(row);
+                                });
+                            }
+                            if (containerGroupList) containerGroupList.classList.remove('d-none');
+                            showSatsetToast(`✅ Ditemukan ${data.groups.length} grup WhatsApp! Silakan klik untuk memilih.`, 'success');
+                        } else {
+                            showSatsetToast(data.message || 'Tidak ada grup ditemukan atau belum tersinkron di Fonnte.', 'warning');
+                        }
+                    } catch (e) {
+                        showSatsetToast('Gagal mengambil daftar grup dari server', 'danger');
+                    } finally {
+                        btnFetchGroups.disabled = false;
+                        btnFetchGroups.innerHTML = origHtml;
+                    }
+                });
+            }
+
+
+            if (btnTestSend) {
+                btnTestSend.addEventListener('click', async function () {
+                    const tokenVal = inputToken ? inputToken.value.trim() : '';
+                    const phoneVal = inputPhone ? inputPhone.value.trim() : '';
+
+                    if (!phoneVal) {
+                        showSatsetToast('Silakan isi Nomor WhatsApp Tujuan terlebih dahulu!', 'danger');
+                        return;
+                    }
+
+                    btnTestSend.disabled = true;
+                    btnTestSend.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Mengirim...';
+
+                    try {
+                        const res = await fetch('/bot/test-send', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRF-TOKEN': getCsrfToken(),
+                                'Accept': 'application/json'
+                            },
+                            body: JSON.stringify({
+                                fonnte_token: tokenVal,
+                                target_phone: phoneVal
+                            })
+                        });
+                        const data = await res.json();
+                        if (res.ok && data.success) {
+                            showSatsetToast('🤖 <b>Berhasil!</b> Pesan tes telah terkirim ke WhatsApp tujuan via Bot Fonnte!', 'success');
+                        } else {
+                            showSatsetToast(data.message || 'Gagal mengirim pesan tes via Fonnte', 'danger');
+                        }
+                    } catch (e) {
+                        showSatsetToast('Gagal mengirim pesan tes', 'danger');
+                    } finally {
+                        btnTestSend.disabled = false;
+                        btnTestSend.innerHTML = '<i class="bi bi-send-check me-1"></i> Tes Kirim Pesan via Bot';
+                    }
+                });
+            }
+        }
+
+        // F. Auto-Notify Heartbeat (Otomatis kirim saat tab terbuka & KD selesai jeda tanpa klik apapun)
+        async function runAutoNotifyHeartbeat() {
+            try {
+                const res = await fetch('/bot/check-auto-notify', {
+                    method: 'POST',
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'Accept': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                if (data.success && data.notified_count > 0) {
+                    data.notified_kds.forEach(item => {
+                        if (item.type === 'spam_10m_unreplied') {
+                            showSatsetToast(`⚠️ <b>[Bot WA Fonnte]</b> Spam 10 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (${item.ready_count} char) karena belum dibalas!`, 'warning');
+                        } else if (item.type === 'spam_5m_overdue') {
+                            showSatsetToast(`🔥 <b>[Bot WA Fonnte]</b> Spam Overdue 5 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (> 30m belum diceklis)!`, 'danger');
+                        } else {
+                            showSatsetToast(`🤖 <b>[Bot WA Fonnte]</b> Pengingat KD #${item.kd} (${item.ready_count} char siap) otomatis terkirim ke WhatsApp!`, 'success');
+                        }
+                    });
+                }
+            } catch (e) {
+                // Background check, abaikan jika offline
+            }
+        }
+
+        // Listener Tombol "Saya OTW / Tandai Sudah Dibalas" pada kartu KD
+        document.addEventListener('click', async function (e) {
+            const btn = e.target.closest('.btn-ack-kd');
+            if (!btn) return;
+            const kd = btn.getAttribute('data-kd');
+            if (!kd) return;
+
+            btn.disabled = true;
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width: 10px; height: 10px;"></span>';
+
+            try {
+                const res = await fetch(`/bot/acknowledge-kd/${kd}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'Accept': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showSatsetToast(`👍 <b>[KD #${kd}]</b> Berhasil ditandai sedang dikerjakan! Waktu 30 menit dimulai.`, 'success');
+                    setTimeout(() => location.reload(), 1200);
+                } else {
+                    showSatsetToast(data.message || 'Gagal menandai KD', 'danger');
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            } catch (err) {
+                showSatsetToast('Gagal memproses tanda OTW', 'danger');
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        });
+
+        // Jalankan pengecekan heartbeat pertama kali setelah 5 detik, lalu tiap 25 detik
+        setTimeout(runAutoNotifyHeartbeat, 5000);
+        setInterval(runAutoNotifyHeartbeat, 25000);
+
+        // Ekspor fungsi trigger heartbeat langsung saat timer 00:00
+        window.SatsetTriggerHeartbeat = runAutoNotifyHeartbeat;
+    }
+
     // Ekspor helper global jika dipanggil manual
     window.Satset = {
         toast: showSatsetToast,
         copyWA: window.copyWhatsAppFormat,
+        sendWA: sendDirectWhatsApp,
+        sendSingleKdWA: function (kd) {
+            const card = document.querySelector(`.kd-card-wrapper[data-kd="${kd}"]`);
+            if (!card) return;
+            const btn = card.querySelector('.btn-wa-single-kd');
+            if (btn) btn.click();
+        },
+        sendSingleKdBot: function (kd) {
+            const card = document.querySelector(`.kd-card-wrapper[data-kd="${kd}"]`);
+            if (!card) return;
+            const btn = card.querySelector('.btn-bot-notify-kd');
+            if (btn) btn.click();
+        },
+        sendAllWA: function () {
+            const btn = document.getElementById('btnShareAllWA');
+            if (btn) btn.click();
+        },
+        sendAllBot: function () {
+            const btn = document.getElementById('btnBotShareAll');
+            if (btn) btn.click();
+        },
         refresh: function () {
             sessionStorage.setItem('satset_scroll_pos', window.scrollY);
             window.location.reload();

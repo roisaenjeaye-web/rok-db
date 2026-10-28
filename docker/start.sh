@@ -12,5 +12,5 @@ php artisan config:cache
 php artisan route:cache
 php artisan view:cache
 
-echo "=== [4/4] Menjalankan RoK Joki Server di Port ${PORT:-10000} ==="
-exec php artisan serve --host=0.0.0.0 --port="${PORT:-10000}"
+echo "=== [4/4] Menjalankan RoK Joki Server di Port ${PORT:-7860} ==="
+exec php artisan serve --host=0.0.0.0 --port="${PORT:-7860}"

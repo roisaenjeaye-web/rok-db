@@ -78,9 +78,18 @@
                 <div class="card-body p-4">
                     <form action="/stok/{{ $kingdom->id }}/update" method="POST">
                         @csrf
-                        <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold">NOMOR KINGDOM (PERMANEN)</label>
-                            <input type="text" class="form-control bg-light" value="#{{ $kingdom->kd_number }}" disabled>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-bold">NOMOR KINGDOM (PERMANEN)</label>
+                                <input type="text" class="form-control bg-light" value="#{{ $kingdom->kd_number }}" disabled>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label text-muted small fw-bold">⏱️ WAKTU JEDA PANEN (JAM)</label>
+                                <div class="input-group">
+                                    <input type="number" step="0.5" min="0.5" max="48" class="form-control fw-bold" name="cooldown_hours" value="{{ old('cooldown_hours', $kingdom->cooldown_hours ?? 4.0) }}" required>
+                                    <span class="input-group-text">Jam Sekali</span>
+                                </div>
+                            </div>
                         </div>
                         <div class="row g-3 mb-4">
                             <div class="col-6">

@@ -100,14 +100,20 @@
                                 @endif
                             </td>
                             <td class="text-center pe-4">
-                                @if($order->status == 'pending')
-                                    <form action="/riwayat/{{ $order->id }}/selesai" method="POST" onsubmit="return confirm('Tandai selesai? Stok KD #{{ $order->kd_number }} akan otomatis dipotong.');">
+                                <div class="d-flex justify-content-center align-items-center gap-1">
+                                    @if($order->status == 'pending')
+                                        <form action="/riwayat/{{ $order->id }}/selesai" method="POST" onsubmit="return confirm('Tandai selesai? Stok KD #{{ $order->kd_number }} akan otomatis dipotong.');" class="m-0">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-primary shadow-sm"><i class="bi bi-check2-all me-1"></i> Lunas</button>
+                                        </form>
+                                    @else
+                                        <span class="badge bg-light text-secondary border me-1"><i class="bi bi-lock-fill"></i> Selesai</span>
+                                    @endif
+                                    <form action="/riwayat/{{ $order->id }}/hapus" method="POST" onsubmit="return confirm('Hapus riwayat pesanan {{ $order->buyer_name }} ini?');" class="m-0">
                                         @csrf
-                                        <button type="submit" class="btn btn-sm btn-primary shadow-sm"><i class="bi bi-check2-all me-1"></i> Lunas</button>
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus Pesanan"><i class="bi bi-trash-fill"></i></button>
                                     </form>
-                                @else
-                                    <span class="text-muted small"><i class="bi bi-lock-fill"></i> Selesai</span>
-                                @endif
+                                </div>
                             </td>
                         </tr>
                         @empty

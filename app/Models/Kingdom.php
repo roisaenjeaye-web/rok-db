@@ -9,6 +9,25 @@ class Kingdom extends Model
 {
     use HasFactory;
 
-    // Tambahkan baris ini biar Laravel ngijinin data masuk
-    protected $fillable = ['kd_number', 'food', 'wood', 'stone', 'gold'];
+    protected $fillable = [
+        'kd_number',
+        'cooldown_hours',
+        'last_notified_at',
+        'replied_at',
+        'replied_by',
+        'ready_since',
+        'reminder_count',
+        'food',
+        'wood',
+        'stone',
+        'gold'
+    ];
+
+    protected $casts = [
+        'cooldown_hours' => 'float',
+        'last_notified_at' => 'datetime',
+        'replied_at' => 'datetime',
+        'ready_since' => 'datetime',
+        'reminder_count' => 'integer',
+    ];
 }

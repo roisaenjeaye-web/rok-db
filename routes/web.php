@@ -5,6 +5,7 @@ use App\Http\Controllers\CalculatorController;
 use App\Http\Controllers\KingdomController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\GameAccountController;
+use App\Http\Controllers\BotNotificationController;
 
 Route::get('/', function () {
     return redirect('/stok');
@@ -12,6 +13,10 @@ Route::get('/', function () {
 
 // Semua halaman operasional joki diwajibkan login agar otomatis mengenali operator
 Route::middleware('auth')->group(function () {
+    // Fitur Operator Joki Aktif (Switch Operator)
+    Route::post('/operator/switch', [GameAccountController::class, 'setActiveWorker']);
+    Route::post('/akun/set-worker', [GameAccountController::class, 'setActiveWorker']);
+
     // Fitur CRUD Stok Kingdom
     Route::get('/stok', [KingdomController::class, 'index'])->name('home');
     Route::post('/stok/tambah', [KingdomController::class, 'store']);
@@ -30,17 +35,54 @@ Route::middleware('auth')->group(function () {
     Route::post('/kalkulator/simpan', [OrderController::class, 'store']);
     Route::get('/riwayat', [OrderController::class, 'index']);
     Route::post('/riwayat/{id}/selesai', [OrderController::class, 'complete']);
+    Route::post('/riwayat/{id}/hapus', [OrderController::class, 'destroy']);
 
     // Fitur Manajemen Akun & Ternak Farm
     Route::get('/akun', [GameAccountController::class, 'index']);
     Route::post('/akun/tambah', [GameAccountController::class, 'storeAccount']);
+    Route::post('/akun/{id}/update', [GameAccountController::class, 'updateAccount']);
+    Route::post('/akun/{id}/hapus', [GameAccountController::class, 'destroyAccount']);
     Route::post('/akun/tambah-char', [GameAccountController::class, 'storeCharacter']);
+    Route::post('/akun/char/{id}/update', [GameAccountController::class, 'updateCharacter']);
+    Route::post('/akun/char/{id}/hapus', [GameAccountController::class, 'destroyCharacter']);
     Route::post('/akun/char/{id}/farm', [GameAccountController::class, 'farmDone']);
     Route::post('/akun/char-bulk/farm', [GameAccountController::class, 'farmDoneBulk']);
     Route::post('/akun/char/{id}/adjust-log', [GameAccountController::class, 'adjustCharLog']);
 
     // Fitur Jadwal Farm & Panen Serentak
     Route::get('/jadwal', [GameAccountController::class, 'jadwal']);
+    Route::get('/jadwal/wa-reminder', [GameAccountController::class, 'waReminder']);
+    Route::get('/jadwal/wa-reminder/{kd}', [GameAccountController::class, 'waReminder']);
     Route::post('/jadwal/kd/{kd}/farm', [GameAccountController::class, 'farmDoneSuperBulk']);
     Route::post('/jadwal/kd/{kd}/adjust-log', [GameAccountController::class, 'adjustKdLog']);
+    Route::post('/jadwal/kd/{kd}/set-cooldown', [GameAccountController::class, 'setKdCooldown']);
+
+    // Fitur Bot WhatsApp Otomatis (Fonnte API Gateway)
+    Route::get('/bot/settings', [BotNotificationController::class, 'getSettings']);
+    Route::post('/bot/settings', [BotNotificationController::class, 'saveSettings']);
+    Route::post('/bot/test-connection', [BotNotificationController::class, 'testConnection']);
+    Route::post('/bot/get-groups', [BotNotificationController::class, 'getGroups']);
+    Route::post('/bot/test-send', [BotNotificationController::class, 'testSend']);
+    Route::post('/bot/notify-kd/{kd}', [BotNotificationController::class, 'notifySingleKd']);
+    Route::post('/bot/notify-all', [BotNotificationController::class, 'notifyAllKds']);
+    Route::post('/bot/check-auto-notify', [BotNotificationController::class, 'checkAndAutoNotify']);
+    Route::post('/bot/acknowledge-kd/{kd}', [BotNotificationController::class, 'acknowledgeKd']);
+    Route::get('/bot/{any}', fn() => redirect('/jadwal'))->where('any', '.*');
+
+    // Graceful Fallback: Mencegah error "405 Method Not Allowed" jika ada yang akses URL aksi via GET (misal refresh/back browser)
+    Route::get('/stok/tambah', fn() => redirect('/stok'));
+    Route::get('/stok/{id}/hapus', fn() => redirect('/stok'));
+    Route::get('/stok/{id}/update', fn($id) => redirect("/stok/{$id}/edit"));
+    Route::get('/gaji/{any}', fn() => redirect('/stok'))->where('any', '.*');
+    Route::get('/kalkulator/hitung', fn() => redirect('/kalkulator'));
+    Route::get('/kalkulator/simpan', fn() => redirect('/kalkulator'));
+    Route::get('/riwayat/{any}', fn() => redirect('/riwayat'))->where('any', '.*');
+    Route::get('/akun/tambah', fn() => redirect('/akun'));
+    Route::get('/akun/tambah-char', fn() => redirect('/akun'));
+    Route::get('/akun/{any}', fn() => redirect('/akun'))->where('any', '.*');
+    Route::get('/jadwal/{any}', fn() => redirect('/jadwal'))->where('any', '.*');
 });
+
+// Webhook Fonnte untuk menerima balasan chat WhatsApp dari member grup / user (tanpa CSRF & tanpa auth)
+Route::post('/api/fonnte/webhook', [BotNotificationController::class, 'handleWebhook']);
+Route::post('/bot/webhook', [BotNotificationController::class, 'handleWebhook']);

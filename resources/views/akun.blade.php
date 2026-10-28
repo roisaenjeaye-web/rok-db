@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Ternak Farm - RoK Joki Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -149,6 +150,48 @@
                     </form>
                 </div>
             </div>
+
+            <div class="card shadow-sm mb-4">
+                <div class="card-header bg-white d-flex justify-content-between align-items-center py-2 px-3">
+                    <span class="text-dark fw-bold small"><i class="bi bi-person-lines-fill text-primary me-1"></i> 3. Kelola Akun Gmail ({{ $accounts->count() }})</span>
+                    <button class="btn btn-xs btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#collapseAllAccounts">
+                        <i class="bi bi-chevron-down"></i>
+                    </button>
+                </div>
+                <div class="collapse show" id="collapseAllAccounts">
+                    <div class="card-body p-2" style="max-height: 380px; overflow-y: auto;">
+                        @forelse($accounts as $acc)
+                            <div class="p-2 border rounded bg-white mb-2 shadow-xs d-flex justify-content-between align-items-center">
+                                <div class="text-truncate me-2" style="max-width: 68%;">
+                                    <div class="fw-bold small text-truncate text-dark">{{ $acc->email }}</div>
+                                    <div class="text-muted" style="font-size: 11px;">
+                                        @if($acc->password)
+                                            <i class="bi bi-key text-warning"></i> {{ $acc->password }} |
+                                        @endif
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 9px;">{{ $acc->characters->count() }} Char</span>
+                                        @if($acc->notes)
+                                            <span class="badge bg-light text-secondary border fw-normal ms-1" style="font-size: 9px;">{{ $acc->notes }}</span>
+                                        @endif
+                                    </div>
+                                </div>
+                                <div class="d-flex align-items-center gap-1">
+                                    <button type="button" class="btn btn-xs btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditAcc{{ $acc->id }}" title="Edit Akun">
+                                        <i class="bi bi-pencil"></i>
+                                    </button>
+                                    <form action="/akun/{{ $acc->id }}/hapus" method="POST" class="m-0 d-inline" onsubmit="return confirm('Yakin ingin menghapus akun {{ $acc->email }} beserta SEMUA karakternya? Data tidak bisa dikembalikan!');">
+                                        @csrf
+                                        <button type="submit" class="btn btn-xs btn-outline-danger" title="Hapus Akun">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="text-center py-3 text-muted small">Belum ada akun terdaftar</div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Kolom Data Akun & Char Dikategorikan per KD (Format Card Ringkas seperti Jadwal) -->
@@ -161,6 +204,9 @@
             <div class="row g-3">
                 @forelse ($groupedByKD as $kd => $kdChars)
                     @php
+                        $kdCooldownHours = isset($kingdoms[$kd]) ? (float)$kingdoms[$kd]->cooldown_hours : 4.0;
+                        $kdCooldownMinutes = (int) round($kdCooldownHours * 60);
+
                         $totalChars = $kdChars->count();
                         $uniqueAccs = $kdChars->pluck('game_account_id')->unique();
                         $totalAkun = $uniqueAccs->count();
@@ -168,10 +214,10 @@
                         $maxCooldownEnd = null;
 
                         foreach ($kdChars as $c) {
-                            if (!$c->last_farmed_at || now()->greaterThanOrEqualTo($c->last_farmed_at->copy()->addHours(4))) {
+                            if (!$c->last_farmed_at || now()->greaterThanOrEqualTo($c->last_farmed_at->copy()->addMinutes($kdCooldownMinutes))) {
                                 $readyCount++;
                             } else {
-                                $end = $c->last_farmed_at->copy()->addHours(4);
+                                $end = $c->last_farmed_at->copy()->addMinutes($kdCooldownMinutes);
                                 if ($maxCooldownEnd === null || $end->greaterThan($maxCooldownEnd)) {
                                     $maxCooldownEnd = $end;
                                 }
@@ -192,9 +238,14 @@
                     <div class="col-md-6 mb-2 kd-card-wrapper" data-kd="{{ $kd }}" data-has-ready="{{ $readyCount > 0 ? 'true' : 'false' }}">
                         <div class="card h-100 border-top border-4 {{ $readyCount > 0 ? 'border-danger' : 'border-secondary' }} shadow-sm">
                             <div class="card-header d-flex justify-content-between align-items-center bg-light py-2">
-                                <h5 class="m-0 fw-bold {{ $readyCount > 0 ? 'text-danger' : 'text-secondary' }}">
-                                    <i class="bi bi-geo-alt-fill"></i> KD #{{ $kd }}
-                                </h5>
+                                <div class="d-flex align-items-center gap-2">
+                                    <h5 class="m-0 fw-bold {{ $readyCount > 0 ? 'text-danger' : 'text-secondary' }}">
+                                        <i class="bi bi-geo-alt-fill"></i> KD #{{ $kd }}
+                                    </h5>
+                                    <span class="badge bg-primary-subtle text-primary border border-primary-subtle py-1" style="font-size: 10px;">
+                                        <i class="bi bi-clock-history me-1"></i>Jeda {{ $kdCooldownHours }} Jam
+                                    </span>
+                                </div>
                                 <div class="kd-status-badge">
                                     @if($readyCount == 0)
                                         <span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> All Cooldown</span>
@@ -237,9 +288,27 @@
                                         </button>
                                     @endif
 
-                                    <button class="btn btn-sm btn-outline-secondary w-100 py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseKD{{ $kd }}" aria-expanded="false">
-                                        <i class="bi bi-list-ul me-1"></i> Rincian Char ({{ $totalChars }})
-                                    </button>
+                                    <div class="d-flex gap-1">
+                                        <button class="btn btn-sm btn-outline-secondary flex-grow-1 py-2" type="button" data-bs-toggle="collapse" data-bs-target="#collapseKD{{ $kd }}" aria-expanded="false">
+                                            <i class="bi bi-list-ul me-1"></i> Rincian Char ({{ $totalChars }})
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-success fw-bold btn-bot-notify-kd px-2 py-2 d-flex align-items-center gap-1 shadow-xs"
+                                            data-kd="{{ $kd }}"
+                                            title="Kirim Otomatis via Bot Fonnte (Tanpa Buka WhatsApp)">
+                                            <i class="bi bi-robot"></i> <span style="font-size: 11px;">Bot</span>
+                                        </button>
+                                        <button type="button" class="btn btn-sm btn-outline-success fw-bold btn-wa-single-kd px-2 py-2 d-flex align-items-center gap-1"
+                                            data-kd="{{ $kd }}" 
+                                            data-ready="{{ $readyCount }}" 
+                                            data-total="{{ $totalChars }}" 
+                                            data-cooldown="{{ $cooldownText }}" 
+                                            data-cooldown-hours="{{ $kdCooldownHours }}" 
+                                            data-target-time="{{ $maxCooldownEnd ? $maxCooldownEnd->timestamp : 0 }}"
+                                            data-worker="{{ $activeWorker ?? 'Rois' }}"
+                                            title="Buka Chat WhatsApp (Direct WA)">
+                                            <i class="bi bi-whatsapp"></i> <span style="font-size: 11px;">WA</span>
+                                        </button>
+                                    </div>
 
                                     <!-- Collapse Rincian Akun & Karakter di KD ini -->
                                     <div class="collapse mt-2" id="collapseKD{{ $kd }}">
@@ -249,7 +318,7 @@
                                                     $acc = $charsOfAcc->first()->gameAccount;
                                                     $canBulkFarm = false;
                                                     foreach($charsOfAcc as $c) {
-                                                        if(!$c->last_farmed_at || now()->greaterThanOrEqualTo($c->last_farmed_at->copy()->addHours(4))) {
+                                                        if(!$c->last_farmed_at || now()->greaterThanOrEqualTo($c->last_farmed_at->copy()->addMinutes($kdCooldownMinutes))) {
                                                             $canBulkFarm = true;
                                                             break;
                                                         }
@@ -259,6 +328,11 @@
                                                     <div class="d-flex justify-content-between align-items-center mb-1 pb-1 border-bottom">
                                                         <div class="text-truncate me-1" style="font-size: 11px;">
                                                             <b class="text-dark"><i class="bi bi-envelope-fill text-primary me-1"></i> {{ $acc->email ?? 'Akun' }}</b>
+                                                            @if($acc)
+                                                                <button type="button" class="btn btn-link text-primary p-0 ms-1" style="font-size: 11px; text-decoration: none;" data-bs-toggle="modal" data-bs-target="#modalEditAcc{{ $acc->id }}" title="Edit Akun Gmail">
+                                                                    <i class="bi bi-pencil-square"></i>
+                                                                </button>
+                                                            @endif
                                                             @if($acc && $acc->password)
                                                                 <span class="text-muted ms-1 small"><i class="bi bi-key"></i> {{ $acc->password }}</span>
                                                             @endif
@@ -287,7 +361,7 @@
                                                                 $charOnCooldown = false;
                                                                 $charCooldownText = '';
                                                                 if($char->last_farmed_at) {
-                                                                    $charEnd = $char->last_farmed_at->copy()->addHours(4);
+                                                                    $charEnd = $char->last_farmed_at->copy()->addMinutes($kdCooldownMinutes);
                                                                     if(now()->lessThan($charEnd)) {
                                                                         $charOnCooldown = true;
                                                                         $sisaMenitChar = now()->diffInMinutes($charEnd);
@@ -302,7 +376,7 @@
                                                                     <span class="fw-semibold text-dark">{{ $char->ign }}</span>
                                                                     <span class="text-muted ms-1" style="font-size: 10px;">(Log: {{ $char->farm_count }}x)</span>
                                                                 </div>
-                                                                <div>
+                                                                <div class="d-flex align-items-center gap-1">
                                                                     @if($charOnCooldown)
                                                                         <span class="badge bg-secondary" style="font-size: 9px;">
                                                                             <i class="bi bi-clock-history"></i> {{ $charCooldownText }}
@@ -315,6 +389,32 @@
                                                                             </button>
                                                                         </form>
                                                                     @endif
+                                                                    <div class="dropdown d-inline">
+                                                                        <button class="btn btn-xs btn-outline-secondary border-0 py-0 px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Menu Aksi Char">
+                                                                            <i class="bi bi-three-dots-vertical"></i>
+                                                                        </button>
+                                                                        <ul class="dropdown-menu dropdown-menu-end shadow-sm border-0 py-1" style="font-size: 12px; min-width: 170px;">
+                                                                            <li>
+                                                                                <button type="button" class="dropdown-item py-1" data-bs-toggle="modal" data-bs-target="#modalAdjustChar{{ $char->id }}">
+                                                                                    <i class="bi bi-sliders text-primary me-2"></i> Atur Log / Jeda
+                                                                                </button>
+                                                                            </li>
+                                                                            <li>
+                                                                                <button type="button" class="dropdown-item py-1" data-bs-toggle="modal" data-bs-target="#modalEditChar{{ $char->id }}">
+                                                                                    <i class="bi bi-pencil-square text-warning me-2"></i> Edit Karakter
+                                                                                </button>
+                                                                            </li>
+                                                                            <li><hr class="dropdown-divider my-1"></li>
+                                                                            <li>
+                                                                                <form action="/akun/char/{{ $char->id }}/hapus" method="POST" class="m-0" onsubmit="return confirm('Yakin hapus karakter {{ $char->ign }}?');">
+                                                                                    @csrf
+                                                                                    <button type="submit" class="dropdown-item text-danger py-1">
+                                                                                        <i class="bi bi-trash me-2"></i> Hapus Karakter
+                                                                                    </button>
+                                                                                </form>
+                                                                            </li>
+                                                                        </ul>
+                                                                    </div>
                                                                 </div>
                                                             </div>
                                                         @endforeach
@@ -357,7 +457,18 @@
                                             <div class="fw-bold small text-truncate">{{ $uAcc->email }}</div>
                                             <div class="text-muted" style="font-size: 11px;"><i class="bi bi-key"></i> {{ $uAcc->password ?? 'Kosong' }}</div>
                                         </div>
-                                        <span class="badge bg-secondary-subtle text-secondary" style="font-size: 10px;">0 Char</span>
+                                        <div class="d-flex align-items-center gap-1">
+                                            <span class="badge bg-secondary-subtle text-secondary" style="font-size: 10px;">0 Char</span>
+                                            <button type="button" class="btn btn-xs btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditAcc{{ $uAcc->id }}" title="Edit Akun">
+                                                <i class="bi bi-pencil"></i>
+                                            </button>
+                                            <form action="/akun/{{ $uAcc->id }}/hapus" method="POST" class="m-0 d-inline" onsubmit="return confirm('Yakin ingin menghapus akun {{ $uAcc->email }}?');">
+                                                @csrf
+                                                <button type="submit" class="btn btn-xs btn-outline-danger" title="Hapus Akun">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </form>
+                                        </div>
                                     </div>
                                 </div>
                             @endforeach
@@ -366,11 +477,127 @@
                 </div>
             @endif
         </div>
-
-        
-         
     </div>
 </div>
+
+<!-- MODALS EDIT AKUN GMAIL -->
+@foreach($accounts as $acc)
+    <div class="modal fade" id="modalEditAcc{{ $acc->id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-light py-2">
+                    <h6 class="modal-title fw-bold text-primary"><i class="bi bi-pencil-square me-1"></i> Edit Akun Gmail</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/akun/{{ $acc->id }}/update" method="POST">
+                    @csrf
+                    <div class="modal-body p-3">
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-muted">EMAIL</label>
+                            <input type="email" name="email" value="{{ $acc->email }}" required class="form-control form-control-sm">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-muted">PASSWORD (OPSIONAL)</label>
+                            <input type="text" name="password" value="{{ $acc->password }}" class="form-control form-control-sm">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-muted">CATATAN</label>
+                            <input type="text" name="notes" value="{{ $acc->notes }}" class="form-control form-control-sm" placeholder="Bind Lilith, dll">
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary btn-sm fw-bold"><i class="bi bi-save me-1"></i> Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+@endforeach
+
+<!-- MODALS EDIT & ADJUST LOG CHAR -->
+@foreach($characters as $char)
+    <!-- Modal Edit Char -->
+    <div class="modal fade" id="modalEditChar{{ $char->id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-sm">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-light py-2">
+                    <h6 class="modal-title fw-bold text-warning"><i class="bi bi-pencil-square me-1"></i> Edit Karakter</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/akun/char/{{ $char->id }}/update" method="POST">
+                    @csrf
+                    <div class="modal-body p-3">
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-muted">IGN / NAMA CHAR</label>
+                            <input type="text" name="ign" value="{{ $char->ign }}" required class="form-control form-control-sm">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-muted">NOMOR KD</label>
+                            <input type="number" name="kd_number" value="{{ $char->kd_number }}" required class="form-control form-control-sm">
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold text-muted">PINDAH KE AKUN GMAIL</label>
+                            <select name="game_account_id" class="form-select form-select-sm" required>
+                                @foreach($accounts as $a)
+                                    <option value="{{ $a->id }}" {{ $char->game_account_id == $a->id ? 'selected' : '' }}>
+                                        {{ $a->email }}
+                                    </option>
+                                @endforeach
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary btn-sm fw-bold"><i class="bi bi-save me-1"></i> Simpan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Atur Log / Jeda Char -->
+    <div class="modal fade" id="modalAdjustChar{{ $char->id }}" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-light py-2">
+                    <h6 class="modal-title fw-bold text-primary"><i class="bi bi-sliders me-1"></i> Atur Log & Jeda: {{ $char->ign }}</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <form action="/akun/char/{{ $char->id }}/adjust-log" method="POST">
+                    @csrf
+                    <div class="modal-body p-3">
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">OPERATOR JOKI</label>
+                            <select name="worker_name" class="form-select form-select-sm">
+                                @foreach($knownWorkers as $w)
+                                    <option value="{{ $w }}" {{ ($activeWorker ?? 'Rois') === $w ? 'selected' : '' }}>{{ $w }}</option>
+                                @endforeach
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted">AKSI PENGATURAN</label>
+                            <select name="action" class="form-select form-select-sm" onchange="document.getElementById('customInputChar{{ $char->id }}').classList.toggle('d-none', this.value !== 'set')">
+                                <option value="reset_cooldown">✨ Reset Jeda (Langsung Jadikan Siap Panen)</option>
+                                <option value="decrement">Kurangi Log 1 (-1)</option>
+                                <option value="reset">Reset Log Jadi 0</option>
+                                <option value="set">Atur Angka Tertentu (Custom Log)</option>
+                            </select>
+                        </div>
+                        <div class="mb-3 d-none" id="customInputChar{{ $char->id }}">
+                            <label class="form-label small fw-bold text-muted">JUMLAH LOG BARU</label>
+                            <input type="number" name="custom_count" class="form-control form-control-sm" min="0" placeholder="Contoh: 50">
+                        </div>
+                    </div>
+                    <div class="modal-footer bg-light p-2">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" class="btn btn-primary btn-sm fw-bold"><i class="bi bi-check-circle me-1"></i> Terapkan</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+@endforeach
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/js/satset.js"></script>

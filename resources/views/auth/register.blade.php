@@ -99,7 +99,7 @@
                 <label class="form-label small fw-bold text-muted">NAMA OPERATOR / USERNAME</label>
                 <div class="input-group">
                     <span class="input-group-text"><i class="bi bi-person text-muted"></i></span>
-                    <input type="text" name="name" class="form-control" placeholder="Contoh: Rois / Therta" value="{{ old('name') }}" required autofocus autocomplete="name">
+                    <input type="text" name="name" class="form-control" placeholder="Contoh: Rois / Nama Operator" value="{{ old('name') }}" required autofocus autocomplete="name">
                 </div>
                 <div class="form-text" style="font-size: 11px;">Nama ini akan otomatis dipakai untuk catatan log panen.</div>
             </div>

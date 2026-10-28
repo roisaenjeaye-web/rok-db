@@ -293,6 +293,13 @@
                                 <input type="number" class="form-control" name="kd_number" required placeholder="Contoh: 3124">
                             </div>
                         </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">⏱️ WAKTU JEDA MACUL (JAM)</label>
+                            <div class="input-group">
+                                <input type="number" step="0.5" min="0.5" max="48" class="form-control" name="cooldown_hours" value="4.0" placeholder="4.0">
+                                <span class="input-group-text">Jam Sekali</span>
+                            </div>
+                        </div>
                         <div class="row g-2 mb-3">
                             <div class="col-6">
                                 <label class="form-label text-muted small fw-bold">🌽 FOOD (M)</label>
@@ -332,6 +339,7 @@
                             <thead class="table-light text-muted small">
                                 <tr>
                                     <th class="ps-4">KINGDOM</th>
+                                    <th>JEDA MACUL</th>
                                     <th>FOOD</th>
                                     <th>WOOD</th>
                                     <th>STONE</th>
@@ -345,13 +353,18 @@
                                     <td class="ps-4">
                                         <span class="badge bg-primary bg-opacity-10 text-primary fs-6 px-3">#{{ $kd->kd_number }}</span>
                                     </td>
+                                    <td>
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold">
+                                            <i class="bi bi-clock-history me-1"></i>{{ $kd->cooldown_hours ?? 4 }} Jam
+                                        </span>
+                                    </td>
                                     <td class="fw-medium text-success">{{ $kd->food }}M</td>
                                     <td class="fw-medium text-success">{{ $kd->wood }}M</td>
                                     <td class="fw-medium text-secondary">{{ $kd->stone }}M</td>
                                     <td class="fw-medium text-warning">{{ $kd->gold }}M</td>
                                     <td class="text-center">
                                         <div class="d-flex gap-2 justify-content-center">
-                                            <a href="/stok/{{ $kd->id }}/edit" class="btn btn-sm btn-outline-warning text-dark" title="Edit Stok"><i class="bi bi-pencil-fill"></i></a>
+                                            <a href="/stok/{{ $kd->id }}/edit" class="btn btn-sm btn-outline-warning text-dark" title="Edit Stok & Jeda"><i class="bi bi-pencil-fill"></i></a>
                                             <form action="/stok/{{ $kd->id }}/hapus" method="POST" onsubmit="return confirm('Hapus KD #{{ $kd->kd_number }} beserta stoknya?');">
                                                 @csrf
                                                 <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus"><i class="bi bi-trash-fill"></i></button>
@@ -361,7 +374,7 @@
                                 </tr>
                                 @empty
                                 <tr>
-                                    <td colspan="6" class="text-center py-5 text-muted">
+                                    <td colspan="7" class="text-center py-5 text-muted">
                                         <i class="bi bi-inbox fs-1 d-block mb-2"></i> Belum ada data Kingdom.
                                     </td>
                                 </tr>

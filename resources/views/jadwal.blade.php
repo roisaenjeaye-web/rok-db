@@ -3,6 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="csrf-token" content="{{ csrf_token() }}">
     <title>Jadwal Farm - RoK Joki Admin</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
@@ -66,26 +67,10 @@
         </a>
     </div>
 
-    <!-- Status Operator Joki Login -->
     @php
         $activeWorker = auth()->user()->name ?? 'Rois';
-        $allWorkers = $knownWorkers ?? ['Rois', 'Therta'];
     @endphp
-    <div class="card bg-white border-0 shadow-sm mb-4">
-        <div class="card-body p-3 d-flex flex-wrap justify-content-between align-items-center gap-2">
-            <div class="d-flex align-items-center gap-2">
-                <span class="badge bg-success-subtle text-success border border-success-subtle px-2 py-1">
-                    <i class="bi bi-circle-fill" style="font-size: 8px;"></i> Online
-                </span>
-                <span class="text-dark small fw-bold">
-                    Login sebagai: <span class="text-primary fs-6">{{ $activeWorker }}</span>
-                </span>
-            </div>
-            <div class="text-muted small">
-                <i class="bi bi-lightning-charge text-warning"></i> Semua panen otomatis tercatat atas nama <b>{{ $activeWorker }}</b>
-            </div>
-        </div>
-    </div>
+
 
     @if(session('success'))
         <div class="alert alert-success alert-dismissible fade show border-0 shadow-sm" role="alert">
@@ -101,6 +86,7 @@
     @endif
 
     <!-- Filter & Pencarian Cepat KD (Satset) -->
+    <!-- Filter & Pencarian Cepat KD (Satset) + Pengingat WA -->
     <div class="card bg-white border-0 shadow-sm mb-3">
         <div class="card-body p-2 d-flex flex-wrap justify-content-between align-items-center gap-2">
             <div class="d-flex align-items-center gap-1 overflow-auto py-1" style="white-space: nowrap;">
@@ -114,8 +100,17 @@
                     <i class="bi bi-clock-history me-1"></i> Sedang Cooldown
                 </button>
             </div>
-            <div class="ms-auto" style="min-width: 130px; max-width: 200px;">
-                <div class="input-group input-group-sm">
+            <div class="d-flex align-items-center gap-2 ms-auto">
+                <button type="button" class="btn btn-sm btn-success rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnBotShareAll" style="font-size: 12px;" title="Kirim Rekap Otomatis via Bot Fonnte (Tanpa Buka WA)">
+                    <i class="bi bi-robot fs-6"></i> <span>Bot Rekap</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnShareAllWA" style="font-size: 12px;" title="Buka Chat WhatsApp Rekap">
+                    <i class="bi bi-whatsapp fs-6"></i> <span>Manual WA</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center p-0" style="width: 28px; height: 28px; font-size: 12px;" data-bs-toggle="modal" data-bs-target="#modalSettingWA" title="Pengaturan Bot WA Fonnte">
+                    <i class="bi bi-gear-fill"></i>
+                </button>
+                <div class="input-group input-group-sm" style="min-width: 120px; max-width: 180px;">
                     <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
                     <input type="text" id="inputSearchKD" class="form-control border-start-0" placeholder="Cari KD #...">
                 </div>
@@ -126,16 +121,19 @@
     <div class="row">
         @forelse ($groupedByKD as $kd => $chars)
             @php
+                $kdCooldownHours = isset($kingdoms[$kd]) ? (float)$kingdoms[$kd]->cooldown_hours : 4.0;
+                $kdCooldownMinutes = (int) round($kdCooldownHours * 60);
+
                 $totalChars = $chars->count();
                 $totalAkun = $chars->pluck('game_account_id')->unique()->count();
                 $readyCount = 0;
                 $maxCooldownEnd = null;
 
                 foreach ($chars as $c) {
-                    if (!$c->last_farmed_at || now()->greaterThanOrEqualTo($c->last_farmed_at->copy()->addHours(4))) {
+                    if (!$c->last_farmed_at || now()->greaterThanOrEqualTo($c->last_farmed_at->copy()->addMinutes($kdCooldownMinutes))) {
                         $readyCount++;
                     } else {
-                        $end = $c->last_farmed_at->copy()->addHours(4);
+                        $end = $c->last_farmed_at->copy()->addMinutes($kdCooldownMinutes);
                         if ($maxCooldownEnd === null || $end->greaterThan($maxCooldownEnd)) {
                             $maxCooldownEnd = $end;
                         }
@@ -144,7 +142,7 @@
 
                 $cooldownText = '';
                 if ($maxCooldownEnd) {
-                    $sisaMenit = now()->diffInMinutes($maxCooldownEnd);
+                    $sisaMenit = abs((int) round(now()->diffInMinutes($maxCooldownEnd)));
                     $jam = floor($sisaMenit / 60);
                     $menit = $sisaMenit % 60;
                     $cooldownText = ($jam > 0 ? $jam.'j ' : '') . $menit.'m';
@@ -152,21 +150,19 @@
 
                 // Ambil statistik per worker untuk KD ini
                 $kdStatList = isset($kdStats[$kd]) ? $kdStats[$kd] : collect();
-                $roisStat = $kdStatList->firstWhere('worker_name', 'Rois');
-                $thertaStat = $kdStatList->firstWhere('worker_name', 'Therta');
-                $roisCount = $roisStat ? $roisStat->farm_count : 0;
-                $thertaCount = $thertaStat ? $thertaStat->farm_count : 0;
-
-                // Worker lain yang ada datanya di KD ini
-                $otherStats = $kdStatList->whereNotIn('worker_name', ['Rois', 'Therta']);
             @endphp
 
             <div class="col-xl-4 col-lg-6 mb-4 kd-card-wrapper" data-kd="{{ $kd }}" data-has-ready="{{ $readyCount > 0 ? 'true' : 'false' }}">
                 <div class="card h-100 border-top border-4 {{ $readyCount > 0 ? 'border-danger' : 'border-secondary' }}">
                     <div class="card-header d-flex justify-content-between align-items-center bg-light">
-                        <h5 class="m-0 fw-bold {{ $readyCount > 0 ? 'text-danger' : 'text-secondary' }}">
-                            <i class="bi bi-geo-alt-fill"></i> KD #{{ $kd }}
-                        </h5>
+                        <div class="d-flex align-items-center gap-2">
+                            <h5 class="m-0 fw-bold {{ $readyCount > 0 ? 'text-danger' : 'text-secondary' }}">
+                                <i class="bi bi-geo-alt-fill"></i> KD #{{ $kd }}
+                            </h5>
+                            <button type="button" class="btn btn-xs btn-outline-primary rounded-pill px-2 py-0 fw-bold" data-bs-toggle="modal" data-bs-target="#modalCooldownKD{{ $kd }}" title="Ubah Waktu Jeda KD Ini">
+                                <i class="bi bi-clock-history me-1"></i>{{ $kdCooldownHours }}j
+                            </button>
+                        </div>
                         <div class="kd-status-badge">
                             @if($readyCount == 0)
                                 <span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> All Cooldown</span>
@@ -177,6 +173,40 @@
                     </div>
                     
                     <div class="card-body">
+                        @if($readyCount > 0)
+                            @php
+                                $currentKd = isset($kingdoms[$kd]) ? $kingdoms[$kd] : null;
+                                $repliedAt = $currentKd ? $currentKd->replied_at : null;
+                                $minsSinceReply = $repliedAt ? abs((int) round(now()->diffInMinutes($repliedAt))) : null;
+                            @endphp
+                            @if($repliedAt)
+                                @if($minsSinceReply < 30)
+                                    <div class="alert alert-info py-1 px-2 mb-2 d-flex justify-content-between align-items-center rounded-2 border-0 shadow-xs" style="font-size: 11px;">
+                                        <span class="text-truncate me-1">
+                                            <i class="bi bi-person-check-fill text-primary me-1"></i> Dibalas: <b>{{ $currentKd->replied_by ?: 'Operator' }}</b>
+                                        </span>
+                                        <span class="badge bg-primary text-white" title="Sisa tenggat waktu sebelum spam 5 menit">Tenggat {{ 30 - $minsSinceReply }}m</span>
+                                    </div>
+                                @else
+                                    <div class="alert alert-danger py-1 px-2 mb-2 d-flex justify-content-between align-items-center rounded-2 border-danger shadow-xs" style="font-size: 11px;">
+                                        <span class="text-truncate me-1 fw-bold text-danger">
+                                            <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> OVERDUE ({{ $minsSinceReply }}m)! Belum diceklis
+                                        </span>
+                                        <span class="badge bg-danger text-white">Spam 5m Aktif</span>
+                                    </div>
+                                @endif
+                            @else
+                                <div class="alert alert-warning py-1 px-2 mb-2 d-flex justify-content-between align-items-center rounded-2 border-0 shadow-xs" style="font-size: 11px;">
+                                    <span class="text-truncate me-1 text-dark">
+                                        <i class="bi bi-bell-fill text-warning me-1"></i> Belum Dibalas (Spam 10m)
+                                    </span>
+                                    <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2 py-0 fw-bold btn-ack-kd" data-kd="{{ $kd }}" title="Tandai Anda sedang mengerjakan KD ini">
+                                        <i class="bi bi-hand-thumbs-up me-1"></i>Saya OTW
+                                    </button>
+                                </div>
+                            @endif
+                        @endif
+
                         <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-2">
                             <span class="text-muted small fw-bold"><i class="bi bi-envelope-paper"></i> TOTAL AKUN</span>
                             <span class="fw-bold fs-6">{{ $totalAkun }} Email <span class="text-muted fw-normal">({{ $totalChars }} Char)</span></span>
@@ -185,6 +215,16 @@
                         <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-2">
                             <span class="text-muted small fw-bold"><i class="bi bi-check-circle-fill text-success"></i> SIAP PANEN</span>
                             <span class="fw-bold fs-6 text-success">{{ $readyCount }} Char</span>
+                        </div>
+
+                        <div class="d-flex justify-content-between align-items-center mb-2 border-bottom pb-2">
+                            <span class="text-muted small fw-bold"><i class="bi bi-hourglass-split text-info"></i> SIKLUS PANEN</span>
+                            <span class="fw-bold fs-6 text-primary">
+                                Tiap {{ $kdCooldownHours }} Jam
+                                <button type="button" class="btn btn-link btn-xs p-0 text-decoration-none ms-1" data-bs-toggle="modal" data-bs-target="#modalCooldownKD{{ $kd }}">
+                                    <i class="bi bi-pencil-square"></i> Ubah
+                                </button>
+                            </span>
                         </div>
                         
                         <div class="d-flex justify-content-between align-items-center mb-3">
@@ -200,78 +240,52 @@
                                 <span class="text-muted small fw-bold">
                                     <i class="bi bi-people-fill text-primary me-1"></i> LOG JOKI KD #{{ $kd }}
                                 </span>
-                                <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none small text-muted" data-bs-toggle="modal" data-bs-target="#modalAdjustKD{{ $kd }}">
-                                    <i class="bi bi-sliders"></i> Atur / Reset
-                                </button>
+                                <div class="d-flex align-items-center gap-1">
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none small text-primary me-1" data-bs-toggle="modal" data-bs-target="#modalCooldownKD{{ $kd }}">
+                                        <i class="bi bi-clock"></i> Jeda
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none small text-muted" data-bs-toggle="modal" data-bs-target="#modalAdjustKD{{ $kd }}">
+                                        <i class="bi bi-sliders"></i> Log
+                                    </button>
+                                </div>
                             </div>
                             
                             <div class="row g-2">
-                                <!-- Rois -->
-                                <div class="col-6">
-                                    <div class="bg-white p-2 rounded border text-center shadow-xs">
-                                        <div class="text-muted small fw-bold text-truncate"><i class="bi bi-person-fill text-primary"></i> Rois</div>
-                                        <div class="fs-4 fw-bold text-primary my-1">{{ $roisCount }}<span class="fs-6 text-muted fw-normal">x</span></div>
-                                        <div class="d-flex justify-content-center gap-1">
-                                            <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0">
-                                                @csrf
-                                                <input type="hidden" name="worker_name" value="Rois">
-                                                <input type="hidden" name="action" value="decrement">
-                                                <button type="submit" class="btn btn-xs btn-outline-danger" title="Kurangi 1 (-1)" {{ $roisCount <= 0 ? 'disabled' : '' }}>
-                                                    -1
-                                                </button>
-                                            </form>
-                                            <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0" onsubmit="return confirm('Reset log Rois di KD #{{ $kd }} jadi 0?');">
-                                                @csrf
-                                                <input type="hidden" name="worker_name" value="Rois">
-                                                <input type="hidden" name="action" value="reset">
-                                                <button type="submit" class="btn btn-xs btn-outline-secondary" title="Reset ke 0">
-                                                    <i class="bi bi-arrow-counterclockwise"></i>
-                                                </button>
-                                            </form>
+                                @forelse($knownWorkers as $wName)
+                                    @php
+                                        $wStat = $kdStatList->firstWhere('worker_name', $wName);
+                                        $wCount = $wStat ? $wStat->farm_count : 0;
+                                        $colClass = count($knownWorkers) === 1 ? 'col-12' : 'col-6';
+                                    @endphp
+                                    <div class="{{ $colClass }}">
+                                        <div class="bg-white p-2 rounded border text-center shadow-xs">
+                                            <div class="text-muted small fw-bold text-truncate"><i class="bi bi-person-fill text-primary"></i> {{ $wName }}</div>
+                                            <div class="fs-4 fw-bold text-primary my-1">{{ $wCount }}<span class="fs-6 text-muted fw-normal">x</span></div>
+                                            <div class="d-flex justify-content-center gap-1">
+                                                <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0">
+                                                    @csrf
+                                                    <input type="hidden" name="worker_name" value="{{ $wName }}">
+                                                    <input type="hidden" name="action" value="decrement">
+                                                    <button type="submit" class="btn btn-xs btn-outline-danger" title="Kurangi 1 (-1)" {{ $wCount <= 0 ? 'disabled' : '' }}>
+                                                        -1
+                                                    </button>
+                                                </form>
+                                                <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0" onsubmit="return confirm('Reset log {{ $wName }} di KD #{{ $kd }} jadi 0?');">
+                                                    @csrf
+                                                    <input type="hidden" name="worker_name" value="{{ $wName }}">
+                                                    <input type="hidden" name="action" value="reset">
+                                                    <button type="submit" class="btn btn-xs btn-outline-secondary" title="Reset ke 0">
+                                                        <i class="bi bi-arrow-counterclockwise"></i>
+                                                    </button>
+                                                </form>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                
-                                <!-- Therta -->
-                                <div class="col-6">
-                                    <div class="bg-white p-2 rounded border text-center shadow-xs">
-                                        <div class="text-muted small fw-bold text-truncate"><i class="bi bi-person-fill text-info"></i> Therta</div>
-                                        <div class="fs-4 fw-bold text-info my-1">{{ $thertaCount }}<span class="fs-6 text-muted fw-normal">x</span></div>
-                                        <div class="d-flex justify-content-center gap-1">
-                                            <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0">
-                                                @csrf
-                                                <input type="hidden" name="worker_name" value="Therta">
-                                                <input type="hidden" name="action" value="decrement">
-                                                <button type="submit" class="btn btn-xs btn-outline-danger" title="Kurangi 1 (-1)" {{ $thertaCount <= 0 ? 'disabled' : '' }}>
-                                                    -1
-                                                </button>
-                                            </form>
-                                            <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0" onsubmit="return confirm('Reset log Therta di KD #{{ $kd }} jadi 0?');">
-                                                @csrf
-                                                <input type="hidden" name="worker_name" value="Therta">
-                                                <input type="hidden" name="action" value="reset">
-                                                <button type="submit" class="btn btn-xs btn-outline-secondary" title="Reset ke 0">
-                                                    <i class="bi bi-arrow-counterclockwise"></i>
-                                                </button>
-                                            </form>
-                                        </div>
+                                @empty
+                                    <div class="col-12 text-center text-muted small py-2">
+                                        Belum ada operator terdaftar
                                     </div>
-                                </div>
-
-                                <!-- Worker Tambahan (jika ada) -->
-                                @foreach($otherStats as $os)
-                                    <div class="col-12">
-                                        <div class="bg-white p-2 rounded border d-flex justify-content-between align-items-center">
-                                            <span class="small fw-bold text-muted"><i class="bi bi-person"></i> {{ $os->worker_name }}: <b>{{ $os->farm_count }}x</b></span>
-                                            <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0 d-inline">
-                                                @csrf
-                                                <input type="hidden" name="worker_name" value="{{ $os->worker_name }}">
-                                                <input type="hidden" name="action" value="decrement">
-                                                <button type="submit" class="btn btn-xs btn-outline-danger">-1</button>
-                                            </form>
-                                        </div>
-                                    </div>
-                                @endforeach
+                                @endforelse
                             </div>
                         </div>
 
@@ -292,9 +306,27 @@
                                 </button>
                             @endif
 
-                            <button class="btn btn-sm btn-outline-secondary w-100" type="button" data-bs-toggle="collapse" data-bs-target="#collapseKD{{ $kd }}" aria-expanded="false">
-                                <i class="bi bi-list-ul me-1"></i> Rincian Char ({{ $totalChars }})
-                            </button>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-sm btn-outline-secondary flex-grow-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapseKD{{ $kd }}" aria-expanded="false">
+                                    <i class="bi bi-list-ul me-1"></i> Rincian Char ({{ $totalChars }})
+                                </button>
+                                <button type="button" class="btn btn-sm btn-success fw-bold btn-bot-notify-kd px-2 py-1 d-flex align-items-center gap-1 shadow-xs"
+                                    data-kd="{{ $kd }}"
+                                    title="Kirim Otomatis via Bot Fonnte (Tanpa Buka WhatsApp)">
+                                    <i class="bi bi-robot"></i> <span style="font-size: 11px;">Bot</span>
+                                </button>
+                                <button type="button" class="btn btn-sm btn-outline-success fw-bold btn-wa-single-kd px-2 py-1 d-flex align-items-center gap-1"
+                                    data-kd="{{ $kd }}" 
+                                    data-ready="{{ $readyCount }}" 
+                                    data-total="{{ $totalChars }}" 
+                                    data-cooldown="{{ $cooldownText }}" 
+                                    data-cooldown-hours="{{ $kdCooldownHours }}" 
+                                    data-target-time="{{ $maxCooldownEnd ? $maxCooldownEnd->timestamp : 0 }}"
+                                    data-worker="{{ $activeWorker }}"
+                                    title="Buka Chat WhatsApp (Direct WA)">
+                                    <i class="bi bi-whatsapp"></i> <span style="font-size: 11px;">WA</span>
+                                </button>
+                            </div>
 
                             <div class="collapse mt-2" id="collapseKD{{ $kd }}">
                                 <div class="card card-body bg-light p-2 mb-0 border-0" style="max-height: 220px; overflow-y: auto;">
@@ -303,7 +335,7 @@
                                             $charOnCooldown = false;
                                             $charCooldownText = '';
                                             if ($char->last_farmed_at) {
-                                                $charEnd = $char->last_farmed_at->copy()->addHours(4);
+                                                $charEnd = $char->last_farmed_at->copy()->addMinutes($kdCooldownMinutes);
                                                 if (now()->lessThan($charEnd)) {
                                                     $charOnCooldown = true;
                                                     $sMenit = now()->diffInMinutes($charEnd);
@@ -333,9 +365,12 @@
                                                         <i class="bi bi-clock"></i> {{ $charCooldownText }}
                                                     </span>
                                                 @else
-                                                    <span class="badge bg-success" style="font-size: 10px;">
-                                                        <i class="bi bi-check-circle"></i> Ready
-                                                    </span>
+                                                    <form action="/akun/char/{{ $char->id }}/farm" method="POST" class="d-inline m-0">
+                                                        @csrf
+                                                        <button type="submit" class="btn btn-xs btn-success rounded-pill px-2 py-0 fw-bold" style="font-size: 10px;" title="Panen Karakter Ini">
+                                                            <i class="bi bi-play-fill"></i> Panen
+                                                        </button>
+                                                    </form>
                                                 @endif
                                             </div>
                                         </div>
@@ -363,7 +398,7 @@
                                 <div class="mb-3">
                                     <label class="form-label small fw-bold text-muted">PILIH OPERATOR</label>
                                     <select name="worker_name" class="form-select form-select-sm" required>
-                                        @foreach($allWorkers as $w)
+                                        @foreach($knownWorkers as $w)
                                             <option value="{{ $w }}">{{ $w }}</option>
                                         @endforeach
                                     </select>
@@ -394,6 +429,49 @@
                     </div>
                 </div>
             </div>
+
+            <!-- Modal Atur Cooldown / Waktu Jeda Panen KD #{{ $kd }} -->
+            <div class="modal fade" id="modalCooldownKD{{ $kd }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered modal-sm">
+                    <div class="modal-content border-0 shadow">
+                        <div class="modal-header bg-light py-2">
+                            <h6 class="modal-title fw-bold">
+                                <i class="bi bi-clock-history text-primary me-1"></i> Jeda Panen KD #{{ $kd }}
+                            </h6>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                        </div>
+                        <div class="modal-body p-3">
+                            <p class="text-muted small mb-3">
+                                Atur siklus jeda waktu hitung mundur panen khusus untuk <b>KD #{{ $kd }}</b>.
+                            </p>
+                            <form action="/jadwal/kd/{{ $kd }}/set-cooldown" method="POST">
+                                @csrf
+                                <div class="mb-3">
+                                    <label class="form-label small fw-bold text-muted">WAKTU JEDA (JAM)</label>
+                                    <div class="input-group">
+                                        <input type="number" step="0.5" min="0.5" max="48" name="cooldown_hours" id="inputCooldownKD{{ $kd }}" class="form-control fw-bold fs-5 text-center text-primary" value="{{ $kdCooldownHours }}" required>
+                                        <span class="input-group-text fw-bold">Jam Sekali</span>
+                                    </div>
+                                    <div class="d-flex flex-wrap gap-1 mt-2">
+                                        <button type="button" class="btn btn-xs btn-outline-secondary" onclick="document.getElementById('inputCooldownKD{{ $kd }}').value = 1;">1 Jam</button>
+                                        <button type="button" class="btn btn-xs btn-outline-secondary" onclick="document.getElementById('inputCooldownKD{{ $kd }}').value = 2;">2 Jam</button>
+                                        <button type="button" class="btn btn-xs btn-outline-secondary" onclick="document.getElementById('inputCooldownKD{{ $kd }}').value = 3;">3 Jam</button>
+                                        <button type="button" class="btn btn-xs btn-outline-primary fw-bold" onclick="document.getElementById('inputCooldownKD{{ $kd }}').value = 4;">4 Jam</button>
+                                        <button type="button" class="btn btn-xs btn-outline-secondary" onclick="document.getElementById('inputCooldownKD{{ $kd }}').value = 5;">5 Jam</button>
+                                        <button type="button" class="btn btn-xs btn-outline-secondary" onclick="document.getElementById('inputCooldownKD{{ $kd }}').value = 6;">6 Jam</button>
+                                    </div>
+                                </div>
+                                <div class="alert alert-info py-2 px-3 small mb-3 border-0 bg-info bg-opacity-10 text-dark">
+                                    <i class="bi bi-info-circle me-1 text-primary"></i> <i>Misal diisi 2 jam, maka hitung mundur siap panen KD #{{ $kd }} dihitung 2 jam setelah panen terakhir.</i>
+                                </div>
+                                <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold py-2 shadow-sm">
+                                    <i class="bi bi-save me-1"></i> Simpan Jeda KD #{{ $kd }}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
         @empty
             <div class="col-12">
                 <div class="card shadow-sm">
@@ -406,6 +484,136 @@
                 </div>
             </div>
         @endforelse
+    </div>
+
+    <!-- Modal Pengaturan Bot WhatsApp Otomatis (Fonnte API) -->
+    <div class="modal fade" id="modalSettingWA" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow">
+                <div class="modal-header bg-success text-white py-2">
+                    <h6 class="modal-title fw-bold">
+                        <i class="bi bi-robot me-1"></i> Pengaturan Bot WhatsApp Otomatis (Fonnte)
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <!-- Panduan Singkat Fonnte -->
+                    <div class="alert alert-success bg-success-subtle border border-success-subtle py-2 px-3 small mb-3">
+                        <div class="fw-bold mb-1"><i class="bi bi-lightning-charge-fill text-success me-1"></i> Cara Pakai Bot Otomatis (100% Gratis):</div>
+                        <ol class="ps-3 mb-0" style="font-size: 11px;">
+                            <li>Buka & daftar gratis di <a href="https://fonnte.com" target="_blank" class="fw-bold text-success text-decoration-underline">fonnte.com <i class="bi bi-box-arrow-up-right"></i></a>.</li>
+                            <li>Scan QR dengan nomor WA Anda (sama seperti buka WhatsApp Web).</li>
+                            <li>Salin <b>API Token</b> dari Fonnte dan tempel di bawah ini.</li>
+                            <li>Aktifkan <b>Auto-Send</b>: Bot otomatis kirim notif saat KD siap panen tanpa Anda klik manual!</li>
+                        </ol>
+                    </div>
+
+                    <!-- Input Token Fonnte -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small fw-bold text-muted m-0">1. FONNTE API TOKEN</label>
+                            <span id="badgeDeviceStatus" class="badge bg-secondary" style="font-size: 10px;">Belum Dicek</span>
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light"><i class="bi bi-key-fill text-warning"></i></span>
+                            <input type="password" id="inputFonnteToken" class="form-control" placeholder="Tempel Token Fonnte (contoh: a1b2c3d4...)">
+                            <button class="btn btn-outline-secondary" type="button" id="btnToggleTokenVisibility" title="Lihat/Sembunyikan Token">
+                                <i class="bi bi-eye"></i>
+                            </button>
+                        </div>
+                        <div class="form-text small" style="font-size: 11px;">
+                            Token aman tersimpan di database lokal Laragon Anda.
+                        </div>
+                    </div>
+
+                    <!-- Input Nomor WA Tujuan / ID Grup -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small fw-bold text-muted m-0">2. NOMOR WA ATAU ID GRUP TUJUAN</label>
+                            <button type="button" class="btn btn-xs btn-outline-primary py-0 px-2 fw-bold" id="btnFetchWAGroups" style="font-size: 11px;">
+                                <i class="bi bi-people-fill me-1"></i> Pilih Dari Grup WA
+                            </button>
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light"><i class="bi bi-telephone-fill text-success"></i></span>
+                            <input type="text" id="inputSettingWAPhone" class="form-control" placeholder="Contoh: 08123456789 atau 120363xxxx@g.us">
+                        </div>
+                        
+                        <!-- Container List Grup WhatsApp dari Fonnte -->
+                        <div id="containerGroupList" class="mt-2 p-2 bg-light border rounded small d-none" style="max-height: 180px; overflow-y: auto;">
+                            <div class="d-flex justify-content-between align-items-center mb-1 pb-1 border-bottom">
+                                <span class="fw-bold text-dark" style="font-size: 11px;"><i class="bi bi-whatsapp text-success me-1"></i>Pilih Grup Tujuan:</span>
+                                <button type="button" class="btn-close" style="font-size: 8px;" id="btnCloseGroupList"></button>
+                            </div>
+                            <div id="groupListItems" class="d-flex flex-column gap-1">
+                                <!-- Diisi via Javascript satset.js -->
+                            </div>
+                        </div>
+
+                        <div class="form-text small" style="font-size: 11px;">
+                            Bisa nomor pribadi (<code>08xx</code>), beberapa nomor dipisah koma, atau <b>ID Grup</b> (<code>...120363xxx@g.us</code>).
+                        </div>
+                    </div>
+
+                    <!-- Switch Auto Send -->
+                    <div class="card bg-light border-0 p-2 mb-3">
+                        <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+                            <input class="form-check-input ms-0" type="checkbox" role="switch" id="checkAutoNotify" checked style="cursor: pointer; width: 36px; height: 20px;">
+                            <label class="form-check-label fw-bold small text-dark" for="checkAutoNotify" style="cursor: pointer;">
+                                🚀 Aktifkan Pengingat Otomatis (Auto-Bot)
+                            </label>
+                        </div>
+                        <div class="text-muted small ps-5 mt-1" style="font-size: 11px;">
+                            Bot otomatis mengirim pesan WhatsApp setiap ada KD yang masa jedanya habis tanpa perlu Anda memencet tombol manual!
+                        </div>
+                    </div>
+
+                    <!-- Panduan Aturan Spam & Anti-Lupa -->
+                    <div class="alert alert-light border small p-2 mb-3 shadow-xs">
+                        <div class="fw-bold text-dark mb-1 d-flex align-items-center">
+                            <i class="bi bi-shield-check text-success me-1 fs-6"></i> Aturan Spam & Anti-Lupa Bot:
+                        </div>
+                        <ul class="mb-0 ps-3" style="font-size: 11px;">
+                            <li><b>Belum Dibalas:</b> Jika tidak ada yang membalas chat WA bot, bot otomatis <b>spam setiap 10 menit sekali</b>.</li>
+                            <li><b>Sudah Dibalas:</b> Saat ada balasan WA (misal "otw") atau klik <i>Saya OTW</i> di web, bot memberi waktu <b>30 menit</b> untuk menyelesaikan panen.</li>
+                            <li><b>Overdue (> 30 Menit):</b> Jika dalam 30 menit belum dikelarin/diceklis di web, bot otomatis <b>spam setiap 5 menit sekali</b> sampai selesai panen!</li>
+                        </ul>
+                    </div>
+
+                    <!-- Input Webhook Fonnte untuk Deteksi Balasan -->
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-center mb-1">
+                            <label class="form-label small fw-bold text-muted m-0">3. WEBHOOK FONNTE (DETEKSI BALASAN WA)</label>
+                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2 fw-bold" id="btnCopyWebhookUrl" style="font-size: 11px;">
+                                <i class="bi bi-clipboard me-1"></i> Salin URL
+                            </button>
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text bg-light"><i class="bi bi-link-45deg text-info"></i></span>
+                            <input type="text" id="inputWebhookUrl" class="form-control" readonly value="https://tint-cherub-polo.ngrok-free.dev/api/fonnte/webhook">
+                        </div>
+                        <div class="form-text small" style="font-size: 11px;">
+                            Tempel URL ini di menu <b>Device Settings -> Webhook</b> pada Fonnte & set <b>Auto Read: On</b> agar balasan member grup langsung tercatat otomatis!
+                        </div>
+                    </div>
+
+                    <!-- Tombol Aksi -->
+                    <div class="d-flex flex-column gap-2">
+                        <button type="button" class="btn btn-primary btn-sm fw-bold py-2 shadow-sm" id="btnSaveBotSettings">
+                            <i class="bi bi-save me-1"></i> Simpan Pengaturan Bot
+                        </button>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-success btn-sm flex-grow-1 fw-bold" id="btnTestBotSend">
+                                <i class="bi bi-send-check me-1"></i> Tes Kirim Pesan via Bot
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnTestDeviceConn" title="Cek status koneksi WA ke Fonnte">
+                                <i class="bi bi-broadcast me-1"></i> Cek Device
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 

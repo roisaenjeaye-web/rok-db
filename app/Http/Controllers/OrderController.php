@@ -68,4 +68,14 @@ class OrderController extends Controller
 
         return back();
     }
+
+    // Hapus Riwayat Pesanan
+    public function destroy($id)
+    {
+        $order = Order::findOrFail($id);
+        $buyer = $order->buyer_name;
+        $order->delete();
+
+        return back()->with('success', "Pesanan atas nama {$buyer} berhasil dihapus dari Buku Kas!");
+    }
 }

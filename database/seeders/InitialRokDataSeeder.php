@@ -843,16 +843,6 @@ class InitialRokDataSeeder extends Seeder
     'created_at' => '2026-10-27T14:47:38.000000Z',
     'updated_at' => '2026-10-27T16:08:40.000000Z',
   ),
-  1 => 
-  array (
-    'id' => 2,
-    'kd_number' => 2359,
-    'worker_name' => 'Therta',
-    'farm_count' => 20,
-    'last_farmed_at' => NULL,
-    'created_at' => '2026-10-27T14:47:38.000000Z',
-    'updated_at' => '2026-10-27T14:48:11.000000Z',
-  ),
 );
         foreach ($stats as $s) {
             KdFarmerStat::updateOrCreate(

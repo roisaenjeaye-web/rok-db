@@ -23,6 +23,7 @@ class KingdomController extends Controller
             foreach ($missingKds as $mKd) {
                 $insertRows[] = [
                     'kd_number' => $mKd,
+                    'cooldown_hours' => 4.0,
                     'food' => 0,
                     'wood' => 0,
                     'stone' => 0,
@@ -36,12 +37,9 @@ class KingdomController extends Controller
 
         $kingdoms = Kingdom::orderBy('kd_number', 'asc')->get();
 
-        // 2. Daftar worker (default Rois & Therta, plus user database & stats)
-        $knownWorkers = ['Rois', 'Therta'];
+        // 2. Daftar operator joki (hanya dari User terdaftar di database)
         $dbUsers = User::pluck('name')->toArray();
-        $statWorkers = KdFarmerStat::select('worker_name')->distinct()->pluck('worker_name')->toArray();
-        $salaryWorkers = Salary::select('worker_name')->distinct()->pluck('worker_name')->toArray();
-        $allWorkers = array_values(array_unique(array_filter(array_merge($knownWorkers, $dbUsers, $statWorkers, $salaryWorkers))));
+        $allWorkers = !empty($dbUsers) ? $dbUsers : ['Rois'];
 
         $allStats = KdFarmerStat::all();
         $allSalaries = Salary::all();
@@ -145,10 +143,12 @@ class KingdomController extends Controller
     {
         $request->validate([
             'kd_number' => 'required|numeric|unique:kingdoms,kd_number',
+            'cooldown_hours' => 'nullable|numeric|min:0.1|max:48',
         ]);
 
         Kingdom::create([
             'kd_number' => $request->kd_number,
+            'cooldown_hours' => $request->cooldown_hours ?? 4.0,
             'food' => $request->food ?? 0,
             'wood' => $request->wood ?? 0,
             'stone' => $request->stone ?? 0,
@@ -168,14 +168,19 @@ class KingdomController extends Controller
     {
         $kingdom = Kingdom::findOrFail($id);
         
+        $request->validate([
+            'cooldown_hours' => 'nullable|numeric|min:0.1|max:48',
+        ]);
+
         $kingdom->update([
+            'cooldown_hours' => $request->cooldown_hours ?? $kingdom->cooldown_hours ?? 4.0,
             'food' => $request->food ?? 0,
             'wood' => $request->wood ?? 0,
             'stone' => $request->stone ?? 0,
             'gold' => $request->gold ?? 0,
         ]);
 
-        return redirect('/stok')->with('success', 'Stok KD #' . $kingdom->kd_number . ' berhasil diupdate!');
+        return redirect('/stok')->with('success', 'Stok & Pengaturan KD #' . $kingdom->kd_number . ' berhasil diupdate!');
     }
 
     public function destroy($id)
