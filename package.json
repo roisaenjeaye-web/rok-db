@@ -3,7 +3,7 @@
     "private": true,
     "type": "module",
     "scripts": {
-        "build": "echo 'Assets already built'",
+        "build": "node -e \"const fs=require('fs'); fs.mkdirSync('dist/public', {recursive: true}); fs.cpSync('public', 'dist', {recursive: true}); fs.cpSync('public', 'dist/public', {recursive: true}); console.log('dist generated');\"",
         "build:vite": "vp build",
         "dev": "vp dev"
     },

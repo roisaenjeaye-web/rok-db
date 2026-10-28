@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "buildCommand": "echo 'Frontend assets already built' && mkdir -p dist",
+  "buildCommand": "npm run build",
   "outputDirectory": "public",
   "framework": null,
   "functions": {

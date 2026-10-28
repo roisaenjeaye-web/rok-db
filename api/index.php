@@ -20,10 +20,13 @@ foreach ($tmpDirs as $dir) {
     }
 }
 
-// Clear stale compiled views to ensure any new blade template edits are recompiled immediately
+// Clear stale compiled views and cached route/config files to ensure edits take effect immediately
 $oldViews = array_merge(glob('/tmp/views/*') ?: [], glob('/tmp/storage/framework/views/*') ?: []);
 foreach ($oldViews as $ov) {
     if (is_file($ov)) @unlink($ov);
+}
+foreach (['/tmp/config.php', '/tmp/events.php', '/tmp/packages.php', '/tmp/routes.php', '/tmp/services.php'] as $staleCache) {
+    if (is_file($staleCache)) @unlink($staleCache);
 }
 
 // Normalize server environment so Laravel doesn't prefix routes with '/api'

@@ -736,6 +736,23 @@ class GameAccountController extends Controller
             ]);
         }
 
+    // Fitur Get Ready per Karakter Tunggal (Reset jeda cooldown jadi siap panen sekarang)
+    public function forceReadyChar(Request $request, $id)
+    {
+        $char = Character::findOrFail($id);
+        $char->last_farmed_at = null;
+        $char->save();
+
+        $msg = "✅ Char {$char->ign} berhasil di-Get Ready (siap panen sekarang)!";
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'char_id' => $char->id,
+            ]);
+        }
+
         return back()->with('success', $msg);
     }
 

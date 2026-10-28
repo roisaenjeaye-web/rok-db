@@ -48,6 +48,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/akun/char/{id}/farm', [GameAccountController::class, 'farmDone']);
     Route::post('/akun/char-bulk/farm', [GameAccountController::class, 'farmDoneBulk']);
     Route::post('/akun/char/{id}/adjust-log', [GameAccountController::class, 'adjustCharLog']);
+    Route::post('/akun/char/{id}/force-ready', [GameAccountController::class, 'forceReadyChar']);
 
     // Fitur Jadwal Farm & Panen Serentak
     Route::get('/jadwal', [GameAccountController::class, 'jadwal']);

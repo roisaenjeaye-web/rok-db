@@ -408,9 +408,17 @@
                                             </div>
                                             <div>
                                                 @if($charOnCooldown)
-                                                    <span class="badge bg-secondary" style="font-size: 10px;">
-                                                        <i class="bi bi-clock"></i> {{ $charCooldownText }}
-                                                    </span>
+                                                    <div class="d-inline-flex align-items-center gap-1">
+                                                        <span class="badge bg-secondary" style="font-size: 10px;">
+                                                            <i class="bi bi-clock"></i> {{ $charCooldownText }}
+                                                        </span>
+                                                        <form action="/akun/char/{{ $char->id }}/force-ready" method="POST" class="d-inline m-0 form-force-ready">
+                                                            @csrf
+                                                            <button type="submit" class="btn btn-xs btn-warning rounded-pill px-2 py-0 fw-bold" style="font-size: 10px;" title="Reset jeda char ini jadi Siap Panen sekarang!">
+                                                                <i class="bi bi-check2"></i> Ready
+                                                            </button>
+                                                        </form>
+                                                    </div>
                                                 @else
                                                     <form action="/akun/char/{{ $char->id }}/farm" method="POST" class="d-inline m-0">
                                                         @csrf

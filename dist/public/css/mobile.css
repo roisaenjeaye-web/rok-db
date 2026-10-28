@@ -1,0 +1,174 @@
+/* ==========================================================================
+   RoK Joki - Responsive Mobile Engine (HP Friendly)
+   ========================================================================== */
+
+/* Desktop Default (min-width: 992px) */
+@media (min-width: 992px) {
+    .mobile-header { display: none !important; }
+    .mobile-bottom-nav { display: none !important; }
+    .sidebar { display: flex !important; width: 250px !important; position: fixed !important; }
+    .content { margin-left: 250px !important; padding: 30px !important; }
+}
+
+/* Mobile & Tablet (< 992px) */
+@media (max-width: 991.98px) {
+    html, body {
+        overflow-x: hidden !important;
+        width: 100% !important;
+    }
+
+    body {
+        padding-top: 58px !important;
+        padding-bottom: 72px !important;
+    }
+
+    /* Header Mobile di Atas */
+    .mobile-header {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 56px;
+        background-color: #212529;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        z-index: 1030;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.25);
+    }
+    .mobile-header .brand {
+        color: #fff;
+        font-size: 18px;
+        font-weight: 700;
+        letter-spacing: 0.5px;
+    }
+    .mobile-header .brand span {
+        color: #0d6efd;
+    }
+
+    /* Sidebar Drawer Slide dari Kiri */
+    .sidebar {
+        position: fixed !important;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: 280px !important;
+        max-width: 85vw !important;
+        transform: translateX(-100%);
+        transition: transform 0.25s ease-in-out;
+        z-index: 1050 !important;
+        box-shadow: 5px 0 25px rgba(0, 0, 0, 0.4) !important;
+    }
+    .sidebar.show {
+        transform: translateX(0) !important;
+    }
+
+    /* Backdrop saat Sidebar Terbuka */
+    .sidebar-backdrop {
+        position: fixed;
+        top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0, 0, 0, 0.65);
+        z-index: 1040;
+        backdrop-filter: blur(2px);
+        animation: satsetFadeIn 0.2s ease-out;
+    }
+
+    /* Konten Utama Menyesuaikan Layar HP Penuh */
+    .content {
+        margin-left: 0 !important;
+        padding: 14px 12px !important;
+        width: 100% !important;
+        max-width: 100vw !important;
+        box-sizing: border-box !important;
+    }
+
+    /* Bottom Navigation Bar (Mirip Aplikasi HP Asli) */
+    .mobile-bottom-nav {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 62px;
+        background-color: #212529;
+        display: flex;
+        align-items: center;
+        justify-content: space-around;
+        z-index: 1030;
+        border-top: 1px solid rgba(255, 255, 255, 0.08);
+        box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
+        padding-bottom: env(safe-area-inset-bottom, 0px);
+    }
+    .mobile-bottom-nav a {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #94a3b8;
+        text-decoration: none;
+        font-size: 10px;
+        font-weight: 500;
+        flex: 1;
+        height: 100%;
+        transition: color 0.15s ease;
+        padding: 4px 0;
+    }
+    .mobile-bottom-nav a i {
+        font-size: 1.25rem;
+        margin-bottom: 2px;
+        line-height: 1;
+    }
+    .mobile-bottom-nav a.active {
+        color: #0d6efd !important;
+        font-weight: 700;
+    }
+    .mobile-bottom-nav a.active i {
+        transform: scale(1.1);
+    }
+
+    /* Penyesuaian Card & Grid */
+    .card {
+        border-radius: 12px !important;
+        margin-bottom: 12px !important;
+    }
+    .card-header {
+        padding: 12px 14px !important;
+    }
+    .card-body {
+        padding: 14px 12px !important;
+    }
+
+    /* Font Responsif */
+    h3, .fs-3 {
+        font-size: 1.25rem !important;
+    }
+    h5, .fs-5 {
+        font-size: 1.05rem !important;
+    }
+    p.text-muted {
+        font-size: 0.8rem !important;
+    }
+
+    /* Tombol Ramah Jari HP */
+    .btn {
+        touch-action: manipulation;
+    }
+    .btn-xs {
+        padding: 0.3rem 0.6rem !important;
+        font-size: 0.8rem !important;
+        min-height: 28px;
+    }
+
+    /* Modal Otomatis Pas di Layar HP */
+    .modal-dialog {
+        margin: 10px !important;
+    }
+    .modal-content {
+        border-radius: 14px !important;
+    }
+
+    /* Tabel Otomatis Scroll Horizontal Tanpa Merusak Layout */
+    .table-responsive, table {
+        max-width: 100% !important;
+    }
+}
