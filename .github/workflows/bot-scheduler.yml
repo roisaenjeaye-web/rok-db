@@ -1,0 +1,38 @@
+name: 🤖 Bot Auto-Notify Scheduler
+
+on:
+  schedule:
+    # Jalankan setiap 5 menit (GitHub Actions minimum interval)
+    - cron: '*/5 * * * *'
+  # Bisa juga di-trigger manual dari tab Actions di GitHub
+  workflow_dispatch:
+
+jobs:
+  trigger-bot:
+    name: Trigger Bot Cron
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+
+    steps:
+      - name: 🔔 Ping Bot Cron Endpoint
+        run: |
+          echo "⏰ Triggering bot at $(date '+%Y-%m-%d %H:%M:%S UTC')"
+
+          RESPONSE=$(curl -s -o /tmp/response.txt -w "%{http_code}" \
+            --max-time 30 \
+            -X POST \
+            -H "Authorization: Bearer ${{ secrets.BOT_CRON_SECRET }}" \
+            -H "Content-Type: application/json" \
+            "${{ secrets.APP_URL }}/api/bot/cron")
+
+          BODY=$(cat /tmp/response.txt)
+          echo "HTTP Status: $RESPONSE"
+          echo "Response: $BODY"
+
+          if [ "$RESPONSE" -ge 200 ] && [ "$RESPONSE" -lt 300 ]; then
+            echo "✅ Bot cron berhasil dijalankan!"
+          else
+            echo "⚠️ Bot cron response: $RESPONSE — mungkin tidak ada KD yang perlu dinotif, atau endpoint tidak tersedia."
+            # Tidak fail workflow agar tidak spam notif error
+            exit 0
+          fi

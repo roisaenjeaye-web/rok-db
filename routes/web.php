@@ -97,9 +97,22 @@ Route::middleware('auth')->group(function () {
 Route::post('/api/fonnte/webhook', [BotNotificationController::class, 'handleWebhook']);
 Route::post('/bot/webhook', [BotNotificationController::class, 'handleWebhook']);
 
-// Trigger Cron Bot Pengingat / Spam (bisa dipanggil oleh Vercel Cron atau cron-job.org)
-Route::match(['get', 'post'], '/api/bot/cron', [BotNotificationController::class, 'checkAndAutoNotify']);
+// Trigger Cron Bot Pengingat / Spam (dipanggil GitHub Actions setiap 5 menit)
+// Dilindungi BOT_CRON_SECRET agar tidak bisa di-spam orang lain
+Route::match(['get', 'post'], '/api/bot/cron', function (\Illuminate\Http\Request $request) {
+    $secret = env('BOT_CRON_SECRET', '');
+    $incoming = $request->bearerToken() ?? $request->input('secret', '');
+
+    // Jika secret diset di .env, wajib cocok. Jika belum diset, izinkan (backward compatible)
+    if (!empty($secret) && $incoming !== $secret) {
+        return response()->json(['error' => 'Unauthorized'], 401);
+    }
+
+    return app(\App\Http\Controllers\BotNotificationController::class)->checkAndAutoNotify($request);
+});
 Route::match(['get', 'post'], '/api/bot/check-auto-notify', [BotNotificationController::class, 'checkAndAutoNotify']);
+
+
 
 // Serve satset.js directly with no-cache headers to bypass Vercel CDN static cache
 Route::get('/js/satset-v2.js', function () {

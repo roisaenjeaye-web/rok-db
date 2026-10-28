@@ -9,5 +9,6 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 // Jadwalkan pengecekan bot pengingat & spam anti-lupa farm setiap menit
-Schedule::command('bot:check-farm')->everyMinute();
+// Menggunakan withoutOverlapping agar tidak double-run jika proses belum selesai
+Schedule::command('bot:notify')->everyMinute()->withoutOverlapping();
 
