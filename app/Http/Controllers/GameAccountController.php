@@ -736,6 +736,9 @@ class GameAccountController extends Controller
             ]);
         }
 
+        return back()->with('success', $msg);
+    }
+
     // Fitur Get Ready per Karakter Tunggal (Reset jeda cooldown jadi siap panen sekarang)
     public function forceReadyChar(Request $request, $id)
     {

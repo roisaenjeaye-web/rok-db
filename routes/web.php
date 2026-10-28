@@ -6,6 +6,7 @@ use App\Http\Controllers\KingdomController;
 use App\Http\Controllers\OrderController;
 use App\Http\Controllers\GameAccountController;
 use App\Http\Controllers\BotNotificationController;
+use App\Http\Controllers\AdminController;
 
 Route::get('/', function () {
     return redirect('/stok');
@@ -18,6 +19,15 @@ Route::get('/ping-version', function () {
         'time' => now()->toIso8601String()
     ]);
 });
+
+// Panel Admin — hanya bisa diakses user yang is_admin = true
+Route::middleware('auth')->prefix('admin')->group(function () {
+    Route::get('/', [AdminController::class, 'index'])->name('admin.index');
+    Route::post('/user/{id}/delete', [AdminController::class, 'deleteUser'])->name('admin.deleteUser');
+    Route::post('/user/{id}/toggle-admin', [AdminController::class, 'toggleAdmin'])->name('admin.toggleAdmin');
+    Route::post('/char/{id}/adjust-farm', [AdminController::class, 'adjustFarm'])->name('admin.adjustFarm');
+});
+
 
 // Semua halaman operasional joki diwajibkan login agar otomatis mengenali operator
 Route::middleware('auth')->group(function () {

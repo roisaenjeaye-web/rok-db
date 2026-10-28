@@ -34,6 +34,9 @@
         <a href="/riwayat"><i class="bi bi-journal-text"></i> Buku Kas</a>
         <a href="/akun"><i class="bi bi-people"></i> Manajemen Ternak</a>
         <a href="/jadwal"><i class="bi bi-alarm"></i> Jadwal Farm (KD)</a>
+        @if(auth()->check() && auth()->user()->isAdmin())
+        <a href="/admin" style="color:#ffc107;"><i class="bi bi-shield-lock"></i> Panel Admin</a>
+        @endif
     </div>
 
     @auth
