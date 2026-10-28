@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "buildCommand": "echo 'Frontend assets already built'",
   "framework": null,
   "functions": {
     "api/index.php": {
