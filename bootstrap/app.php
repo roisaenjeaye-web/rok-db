@@ -5,7 +5,7 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
-return Application::configure(basePath: dirname(__DIR__))
+$app = Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
@@ -25,14 +25,17 @@ return Application::configure(basePath: dirname(__DIR__))
         );
     })->create();
 
-if (isset($_ENV['VERCEL']) || env('VERCEL') || getenv('VERCEL')) {
+if (isset($_ENV['VERCEL']) || env('VERCEL') || getenv('VERCEL') || isset($_SERVER['VERCEL'])) {
     $storagePath = '/tmp/storage';
     if (!is_dir($storagePath)) {
         @mkdir($storagePath, 0777, true);
         @mkdir($storagePath . '/framework/views', 0777, true);
         @mkdir($storagePath . '/framework/cache', 0777, true);
+        @mkdir($storagePath . '/framework/cache/data', 0777, true);
         @mkdir($storagePath . '/framework/sessions', 0777, true);
         @mkdir($storagePath . '/logs', 0777, true);
+        @mkdir($storagePath . '/app', 0777, true);
+        @mkdir($storagePath . '/app/public', 0777, true);
     }
     $app->useStoragePath($storagePath);
 }
