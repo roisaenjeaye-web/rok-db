@@ -645,6 +645,195 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/js/satset-v2.js?v={{ time() }}"></script>
+<script src="/js/satset.js?v={{ time() }}"></script>
+<script>
+(function() {
+    'use strict';
+
+    // 1. Filter Buttons & Anti-Autofill Search
+    const filterBtns = document.querySelectorAll('.btn-filter-kd');
+    const searchInput = document.getElementById('inputSearchKD');
+    const clearSearchBtn = document.getElementById('btnClearSearchKD');
+    const cards = document.querySelectorAll('.kd-card-wrapper');
+    const emptyState = document.getElementById('kd-filter-empty');
+    const emptyIcon = document.getElementById('empty-state-icon');
+    const emptyTitle = document.getElementById('empty-state-title');
+    const emptyDesc = document.getElementById('empty-state-desc');
+    const resetFilterBtn = document.getElementById('btnResetFilterToAll');
+
+    let activeFilter = 'all';
+
+    // Bersihkan otomatis jika browser mengautofill email/teks non-KD
+    if (searchInput) {
+        const val = (searchInput.value || '').trim();
+        if (val.includes('@') || val.includes('.com') || val.includes('.net')) {
+            searchInput.value = '';
+        }
+    }
+
+    function updateFilterButtonStyles() {
+        filterBtns.forEach(btn => {
+            const filter = btn.getAttribute('data-filter');
+            btn.classList.remove('active', 'btn-dark', 'btn-danger', 'btn-secondary', 'btn-outline-dark', 'btn-outline-danger', 'btn-outline-secondary');
+
+            if (filter === activeFilter) {
+                btn.classList.add('active');
+                if (filter === 'all') btn.classList.add('btn-dark');
+                else if (filter === 'ready') btn.classList.add('btn-danger');
+                else if (filter === 'cooldown') btn.classList.add('btn-secondary');
+            } else {
+                if (filter === 'all') btn.classList.add('btn-outline-secondary');
+                else if (filter === 'ready') btn.classList.add('btn-outline-danger');
+                else if (filter === 'cooldown') btn.classList.add('btn-outline-secondary');
+            }
+        });
+    }
+
+    function applyFilters() {
+        let visibleCount = 0;
+        const currentSearch = searchInput ? searchInput.value.trim().toLowerCase().replace('#', '') : '';
+
+        if (clearSearchBtn) {
+            clearSearchBtn.classList.toggle('d-none', currentSearch.length === 0);
+        }
+
+        cards.forEach(card => {
+            const kdNum = (card.getAttribute('data-kd') || '').toLowerCase();
+            const hasReady = card.getAttribute('data-has-ready') === 'true';
+
+            let matchFilter = true;
+            if (activeFilter === 'ready') matchFilter = hasReady;
+            else if (activeFilter === 'cooldown') matchFilter = !hasReady;
+
+            let matchSearch = true;
+            if (currentSearch) matchSearch = kdNum.includes(currentSearch);
+
+            if (matchFilter && matchSearch) {
+                card.classList.remove('d-none');
+                visibleCount++;
+            } else {
+                card.classList.add('d-none');
+            }
+        });
+
+        if (emptyState) {
+            if (visibleCount === 0) {
+                emptyState.classList.remove('d-none');
+                if (currentSearch) {
+                    if (emptyIcon) emptyIcon.className = 'bi bi-search fs-1 text-secondary opacity-75';
+                    if (emptyTitle) emptyTitle.innerText = `Tidak ada Kingdom yang cocok dengan "${currentSearch}"`;
+                    if (emptyDesc) emptyDesc.innerText = 'Pastikan nomor Kingdom yang dicari benar (contoh: 2359 atau 3868).';
+                } else if (activeFilter === 'ready') {
+                    if (emptyIcon) emptyIcon.className = 'bi bi-clock-history fs-1 text-warning opacity-75';
+                    if (emptyTitle) emptyTitle.innerText = 'Semua Kingdom Sedang Masa Jeda (Cooldown)';
+                    if (emptyDesc) emptyDesc.innerText = 'Belum ada akun farm yang siap panen saat ini. Silakan klik tombol di bawah untuk melihat KD yang sedang cooldown atau semua KD.';
+                } else if (activeFilter === 'cooldown') {
+                    if (emptyIcon) emptyIcon.className = 'bi bi-check-circle fs-1 text-success opacity-75';
+                    if (emptyTitle) emptyTitle.innerText = 'Tidak Ada Kingdom yang Sedang Cooldown';
+                    if (emptyDesc) emptyDesc.innerText = 'Semua Kingdom sudah siap panen!';
+                }
+            } else {
+                emptyState.classList.add('d-none');
+            }
+        }
+    }
+
+    filterBtns.forEach(btn => {
+        btn.addEventListener('click', function() {
+            activeFilter = this.getAttribute('data-filter') || 'all';
+            updateFilterButtonStyles();
+            applyFilters();
+        });
+    });
+
+    if (searchInput) {
+        searchInput.addEventListener('input', applyFilters);
+    }
+
+    if (clearSearchBtn) {
+        clearSearchBtn.addEventListener('click', function() {
+            if (searchInput) searchInput.value = '';
+            clearSearchBtn.classList.add('d-none');
+            applyFilters();
+        });
+    }
+
+    if (resetFilterBtn) {
+        resetFilterBtn.addEventListener('click', function() {
+            if (searchInput) searchInput.value = '';
+            if (clearSearchBtn) clearSearchBtn.classList.add('d-none');
+            activeFilter = 'all';
+            updateFilterButtonStyles();
+            applyFilters();
+        });
+    }
+
+    // 2. Intercept Form Adjust Log (-1 / +1 / Reset) via AJAX Satset
+    document.querySelectorAll('form[action*="/adjust-log"]').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            const confirmMsg = form.getAttribute('data-confirm');
+            if (confirmMsg && !window.confirm(confirmMsg)) {
+                e.preventDefault();
+                return;
+            }
+
+            e.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.style.opacity = '0.6';
+            }
+
+            try {
+                const formData = new FormData(form);
+                const targetUrl = form.getAttribute('action');
+                const response = await fetch(targetUrl, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    const parentBox = form.closest('.bg-white.p-2');
+                    if (parentBox && typeof data.farm_count !== 'undefined') {
+                        const countEl = parentBox.querySelector('.fs-4.fw-bold');
+                        if (countEl) countEl.innerHTML = `${data.farm_count}<span class="fs-6 text-muted fw-normal">x</span>`;
+
+                        const decBtn = parentBox.querySelector('button.btn-decrement, button[title*="Kurangi"]');
+                        if (decBtn) decBtn.disabled = (data.farm_count <= 0);
+                    } else {
+                        sessionStorage.setItem('satset_scroll_pos', window.scrollY);
+                        window.location.reload();
+                    }
+                } else {
+                    alert(data.message || 'Gagal memproses perubahan log');
+                }
+            } catch (err) {
+                form.submit();
+            } finally {
+                if (btn) {
+                    btn.style.opacity = '1';
+                    btn.innerHTML = originalHtml;
+                    const parentBox = form.closest('.bg-white.p-2');
+                    if (btn.classList.contains('btn-decrement') && parentBox) {
+                        const currentNum = parseInt(parentBox.querySelector('.fs-4.fw-bold')?.innerText || '0', 10);
+                        btn.disabled = (currentNum <= 0);
+                    } else if (!btn.classList.contains('btn-decrement')) {
+                        btn.disabled = false;
+                    }
+                }
+            }
+        });
+    });
+
+    updateFilterButtonStyles();
+    applyFilters();
+})();
+</script>
 </body>
 </html>

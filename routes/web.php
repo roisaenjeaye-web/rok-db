@@ -90,3 +90,17 @@ Route::post('/bot/webhook', [BotNotificationController::class, 'handleWebhook'])
 // Trigger Cron Bot Pengingat / Spam (bisa dipanggil oleh Vercel Cron atau cron-job.org)
 Route::match(['get', 'post'], '/api/bot/cron', [BotNotificationController::class, 'checkAndAutoNotify']);
 Route::match(['get', 'post'], '/api/bot/check-auto-notify', [BotNotificationController::class, 'checkAndAutoNotify']);
+
+// Serve satset.js directly with no-cache headers to bypass Vercel CDN static cache
+Route::get('/js/satset-v2.js', function () {
+    return response()->file(public_path('js/satset.js'), [
+        'Content-Type' => 'application/javascript; charset=utf-8',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
+Route::get('/js/satset.js', function () {
+    return response()->file(public_path('js/satset.js'), [
+        'Content-Type' => 'application/javascript; charset=utf-8',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
