@@ -20,6 +20,12 @@ foreach ($tmpDirs as $dir) {
     }
 }
 
+// Clear stale compiled views to ensure any new blade template edits are recompiled immediately
+$oldViews = array_merge(glob('/tmp/views/*') ?: [], glob('/tmp/storage/framework/views/*') ?: []);
+foreach ($oldViews as $ov) {
+    if (is_file($ov)) @unlink($ov);
+}
+
 // Normalize server environment so Laravel doesn't prefix routes with '/api'
 $_SERVER['SCRIPT_NAME'] = '/index.php';
 $_SERVER['PHP_SELF'] = '/index.php';
