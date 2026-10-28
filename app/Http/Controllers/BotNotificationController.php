@@ -623,7 +623,11 @@ class BotNotificationController extends Controller
         if (request() && request()->getHttpHost() && !in_array(request()->getHost(), ['localhost', '127.0.0.1'])) {
             return request()->getSchemeAndHttpHost() . '/jadwal';
         }
-        return 'https://tint-cherub-polo.ngrok-free.dev/jadwal';
+        $appUrl = env('APP_URL') ?: config('app.url');
+        if ($appUrl && !str_contains($appUrl, 'localhost') && !str_contains($appUrl, '127.0.0.1')) {
+            return rtrim($appUrl, '/') . '/jadwal';
+        }
+        return 'https://rokjoki.vercel.app/jadwal';
     }
 
     // Helper ambil URL Webhook Fonnte publik
@@ -632,6 +636,10 @@ class BotNotificationController extends Controller
         if (request() && request()->getHttpHost() && !in_array(request()->getHost(), ['localhost', '127.0.0.1'])) {
             return request()->getSchemeAndHttpHost() . '/api/fonnte/webhook';
         }
-        return 'https://tint-cherub-polo.ngrok-free.dev/api/fonnte/webhook';
+        $appUrl = env('APP_URL') ?: config('app.url');
+        if ($appUrl && !str_contains($appUrl, 'localhost') && !str_contains($appUrl, '127.0.0.1')) {
+            return rtrim($appUrl, '/') . '/api/fonnte/webhook';
+        }
+        return 'https://rokjoki.vercel.app/api/fonnte/webhook';
     }
 }

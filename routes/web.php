@@ -86,3 +86,7 @@ Route::middleware('auth')->group(function () {
 // Webhook Fonnte untuk menerima balasan chat WhatsApp dari member grup / user (tanpa CSRF & tanpa auth)
 Route::post('/api/fonnte/webhook', [BotNotificationController::class, 'handleWebhook']);
 Route::post('/bot/webhook', [BotNotificationController::class, 'handleWebhook']);
+
+// Trigger Cron Bot Pengingat / Spam (bisa dipanggil oleh Vercel Cron atau cron-job.org)
+Route::match(['get', 'post'], '/api/bot/cron', [BotNotificationController::class, 'checkAndAutoNotify']);
+Route::match(['get', 'post'], '/api/bot/check-auto-notify', [BotNotificationController::class, 'checkAndAutoNotify']);

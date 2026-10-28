@@ -590,7 +590,7 @@
                         </div>
                         <div class="input-group input-group-sm">
                             <span class="input-group-text bg-light"><i class="bi bi-link-45deg text-info"></i></span>
-                            <input type="text" id="inputWebhookUrl" class="form-control" readonly value="https://tint-cherub-polo.ngrok-free.dev/api/fonnte/webhook">
+                            <input type="text" id="inputWebhookUrl" class="form-control" readonly value="{{ url('/api/fonnte/webhook') }}">
                         </div>
                         <div class="form-text small" style="font-size: 11px;">
                             Tempel URL ini di menu <b>Device Settings -> Webhook</b> pada Fonnte & set <b>Auto Read: On</b> agar balasan member grup langsung tercatat otomatis!

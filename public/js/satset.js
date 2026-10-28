@@ -601,7 +601,7 @@
 
     function getDashboardPublicUrl() {
         if (window.location.origin.includes('localhost') || window.location.origin.includes('127.0.0.1')) {
-            return 'https://tint-cherub-polo.ngrok-free.dev/jadwal';
+            return 'https://rokjoki.vercel.app/jadwal';
         }
         return window.location.origin + '/jadwal';
     }

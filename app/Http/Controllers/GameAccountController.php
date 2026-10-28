@@ -490,9 +490,7 @@ class GameAccountController extends Controller
             }
 
             $cdStr = ((float)$cooldownHours == (int)$cooldownHours) ? (int)$cooldownHours : $cooldownHours;
-            $currentUrl = (request() && request()->getHttpHost() && !in_array(request()->getHost(), ['localhost', '127.0.0.1']))
-                ? request()->getSchemeAndHttpHost() . '/jadwal'
-                : 'https://tint-cherub-polo.ngrok-free.dev/jadwal';
+            $currentUrl = \App\Http\Controllers\BotNotificationController::resolveDashboardUrl();
 
             if ($readyCount > 0 || !$maxCooldownEnd || now()->greaterThanOrEqualTo($maxCooldownEnd)) {
                 $text = "🚨 *PANGGILAN PANEN FARM RoK* 🚨\n";
@@ -529,9 +527,7 @@ class GameAccountController extends Controller
             // Rekap Semua KD
             $groupedByKD = Character::with('gameAccount')->get()->groupBy('kd_number')->sortKeys();
             $kingdoms = Kingdom::all()->keyBy('kd_number');
-            $currentUrl = (request() && request()->getHttpHost() && !in_array(request()->getHost(), ['localhost', '127.0.0.1']))
-                ? request()->getSchemeAndHttpHost() . '/jadwal'
-                : 'https://tint-cherub-polo.ngrok-free.dev/jadwal';
+            $currentUrl = \App\Http\Controllers\BotNotificationController::resolveDashboardUrl();
 
             $readyList = [];
             $cooldownList = [];

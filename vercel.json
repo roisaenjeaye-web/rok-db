@@ -45,5 +45,11 @@
     "CACHE_STORE": "array",
     "SESSION_DRIVER": "cookie",
     "LOG_CHANNEL": "stderr"
-  }
+  },
+  "crons": [
+    {
+      "path": "/api/bot/cron",
+      "schedule": "*/5 * * * *"
+    }
+  ]
 }
