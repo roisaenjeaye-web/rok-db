@@ -11,6 +11,14 @@ Route::get('/', function () {
     return redirect('/stok');
 });
 
+Route::get('/ping-version', function () {
+    return response()->json([
+        'status' => 'live',
+        'build' => 'get-ready-v1',
+        'time' => now()->toIso8601String()
+    ]);
+});
+
 // Semua halaman operasional joki diwajibkan login agar otomatis mengenali operator
 Route::middleware('auth')->group(function () {
     // Fitur Operator Joki Aktif (Switch Operator)
