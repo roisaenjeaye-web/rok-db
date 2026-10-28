@@ -20,6 +20,11 @@ foreach ($tmpDirs as $dir) {
     }
 }
 
+// Normalize server environment so Laravel doesn't prefix routes with '/api'
+$_SERVER['SCRIPT_NAME'] = '/index.php';
+$_SERVER['PHP_SELF'] = '/index.php';
+$_SERVER['SCRIPT_FILENAME'] = dirname(__DIR__) . '/public/index.php';
+
 // Ensure VERCEL env is defined so Laravel knows to use /tmp/storage
 putenv('VERCEL=1');
 $_ENV['VERCEL'] = '1';
