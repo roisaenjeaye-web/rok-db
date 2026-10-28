@@ -77,8 +77,9 @@ class GameAccountController extends Controller
         $knownWorkers = $this->getKnownWorkers();
         $activeWorker = $this->getActiveWorker(request());
         $kingdoms = Kingdom::all()->keyBy('kd_number');
+        $isAdmin = auth()->check() ? auth()->user()->isAdmin() : false;
 
-        return view('akun', compact('accounts', 'characters', 'groupedByKD', 'unassignedAccounts', 'kdStats', 'knownWorkers', 'activeWorker', 'kingdoms'));
+        return view('akun', compact('accounts', 'characters', 'groupedByKD', 'unassignedAccounts', 'kdStats', 'knownWorkers', 'activeWorker', 'kingdoms', 'isAdmin'));
     }
 
     // Nyimpen Akun Gmail Baru
@@ -179,9 +180,17 @@ class GameAccountController extends Controller
         return back()->with('success', "Karakter {$char->ign} di KD #{$char->kd_number} berhasil diperbarui!");
     }
 
-    // Hapus Karakter Permanen
+    // Hapus Karakter Permanen (Admin Only)
     public function destroyCharacter($id)
     {
+        // Hanya admin yang boleh hapus karakter
+        if (auth()->check() && !auth()->user()->isAdmin()) {
+            if (request()->ajax() || request()->wantsJson()) {
+                return response()->json(['success' => false, 'message' => '❌ Akses ditolak! Hanya Admin yang bisa menghapus karakter.'], 403);
+            }
+            return back()->with('error', '❌ Akses ditolak! Hanya Admin yang bisa menghapus karakter.');
+        }
+
         $char = Character::findOrFail($id);
         $ign = $char->ign;
         $char->delete();
@@ -334,8 +343,9 @@ class GameAccountController extends Controller
         $knownWorkers = $this->getKnownWorkers();
         $activeWorker = $this->getActiveWorker(request());
         $kingdoms = Kingdom::all()->keyBy('kd_number');
+        $isAdmin = auth()->check() ? auth()->user()->isAdmin() : false;
 
-        return view('jadwal', compact('groupedByKD', 'kdStats', 'knownWorkers', 'activeWorker', 'kingdoms'));
+        return view('jadwal', compact('groupedByKD', 'kdStats', 'knownWorkers', 'activeWorker', 'kingdoms', 'isAdmin'));
     }
 
     // Panen Super Bulk satu Kingdom serentak dengan pencatatan nama joki
@@ -681,5 +691,59 @@ class GameAccountController extends Controller
         }
 
         return back()->with('success', $msg);
+    }
+
+    // Fitur Force Ready: Reset Cooldown SEMUA Char di satu KD sekaligus (Get Ready)
+    public function forceReadyKd(Request $request, $kd)
+    {
+        $chars = Character::where('kd_number', $kd)->get();
+
+        if ($chars->isEmpty()) {
+            $msg = "Tidak ada karakter di KD #{$kd}.";
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 404);
+            }
+            return back()->with('error', $msg);
+        }
+
+        $count = 0;
+        foreach ($chars as $char) {
+            if ($char->last_farmed_at !== null) {
+                $char->last_farmed_at = null;
+                $char->save();
+                $count++;
+            }
+        }
+
+        // Reset tracking notif KD juga
+        $kingdom = Kingdom::where('kd_number', $kd)->first();
+        if ($kingdom) {
+            $kingdom->replied_at = null;
+            $kingdom->replied_by = null;
+            $kingdom->ready_since = null;
+            $kingdom->reminder_count = 0;
+            $kingdom->save();
+        }
+
+        $msg = "✅ {$count} Char di KD #{$kd} berhasil di-Get Ready (cooldown direset, siap panen sekarang)!";
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'kd_number' => (int) $kd,
+                'reset_count' => $count,
+            ]);
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    // Atur Gaji Joki (Admin Only - via KingdomController, tapi guard bisa dipakai dari sini juga)
+    public static function checkAdminOrFail()
+    {
+        if (auth()->check() && !auth()->user()->isAdmin()) {
+            abort(403, 'Akses ditolak! Hanya Admin yang bisa melakukan aksi ini.');
+        }
     }
 }

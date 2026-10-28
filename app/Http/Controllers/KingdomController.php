@@ -85,12 +85,16 @@ class KingdomController extends Controller
             'allWorkers',
             'totalOverallFarm',
             'totalOverallSalary'
-        ));
+        ))->with('isAdmin', auth()->check() ? auth()->user()->isAdmin() : false);
     }
 
-    // Input Gaji Manual
+    // Input Gaji Manual (Admin Only)
     public function storeSalary(Request $request)
     {
+        if (auth()->check() && !auth()->user()->isAdmin()) {
+            return back()->with('error', '❌ Akses ditolak! Hanya Admin yang bisa mengatur gaji.');
+        }
+
         $request->validate([
             'worker_name' => 'required|string',
             'amount' => 'required|numeric|min:0',
@@ -108,9 +112,13 @@ class KingdomController extends Controller
         return back()->with('success', 'Catatan gaji Rp ' . number_format($request->amount, 0, ',', '.') . ' untuk ' . $request->worker_name . ' berhasil dicatat!');
     }
 
-    // Edit Gaji Manual
+    // Edit Gaji Manual (Admin Only)
     public function updateSalary(Request $request, $id)
     {
+        if (auth()->check() && !auth()->user()->isAdmin()) {
+            return back()->with('error', '❌ Akses ditolak! Hanya Admin yang bisa mengatur gaji.');
+        }
+
         $salary = Salary::findOrFail($id);
         $request->validate([
             'worker_name' => 'required|string',
@@ -129,9 +137,13 @@ class KingdomController extends Controller
         return back()->with('success', 'Data gaji ' . $salary->worker_name . ' berhasil diperbarui!');
     }
 
-    // Hapus Gaji Manual
+    // Hapus Gaji Manual (Admin Only)
     public function destroySalary($id)
     {
+        if (auth()->check() && !auth()->user()->isAdmin()) {
+            return back()->with('error', '❌ Akses ditolak! Hanya Admin yang bisa menghapus data gaji.');
+        }
+
         $salary = Salary::findOrFail($id);
         $worker = $salary->worker_name;
         $salary->delete();

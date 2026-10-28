@@ -56,6 +56,7 @@
 </div>
 
 <!-- Main Content -->
+@php $isAdmin = $isAdmin ?? false; @endphp
 <div class="content">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
@@ -96,9 +97,15 @@
             </div>
 
             <div class="d-flex align-items-center gap-2">
+                @if($isAdmin)
                 <button type="button" class="btn btn-sm btn-success fw-bold px-3" data-bs-toggle="modal" data-bs-target="#modalTambahGaji">
                     <i class="bi bi-plus-circle me-1"></i> Input Gaji Manual
                 </button>
+                @else
+                <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle px-2 py-1" style="font-size: 11px;" title="Fitur ini hanya untuk Admin">
+                    <i class="bi bi-lock-fill me-1"></i> Input Gaji (Admin Only)
+                </span>
+                @endif
             </div>
         </div>
 
@@ -199,6 +206,7 @@
                                         <td class="text-end fw-bold text-success">Rp {{ number_format($sal->amount, 0, ',', '.') }}</td>
                                         <td class="text-center">
                                             <div class="d-flex gap-1 justify-content-center">
+                                                @if($isAdmin)
                                                 <!-- Tombol Edit Modal -->
                                                 <button type="button" class="btn btn-xs btn-outline-warning text-dark px-2" data-bs-toggle="modal" data-bs-target="#modalEditGaji{{ $sal->id }}" title="Edit Gaji">
                                                     <i class="bi bi-pencil-fill"></i>
@@ -211,6 +219,11 @@
                                                         <i class="bi bi-trash-fill"></i>
                                                     </button>
                                                 </form>
+                                                @else
+                                                <span class="text-muted" style="font-size: 11px;" title="Hanya Admin yang bisa edit/hapus gaji">
+                                                    <i class="bi bi-lock-fill"></i>
+                                                </span>
+                                                @endif
                                             </div>
                                         </td>
                                     </tr>

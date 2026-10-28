@@ -56,15 +56,24 @@
     @endauth
 </div>
 
+@php $isAdmin = $isAdmin ?? false; @endphp
+
 <div class="content">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h3 class="fw-bold text-dark m-0">Jadwal Eksekusi Farm (Minimalist View)</h3>
             <p class="text-muted small mb-0">Pantau dan panen serentak akun farm berdasarkan Kingdom dengan sistem otomatis multi-operator</p>
         </div>
-        <a href="/akun" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-gear-fill me-1"></i> Kelola Char
-        </a>
+        <div class="d-flex align-items-center gap-2">
+            @if($isAdmin)
+                <span class="badge bg-danger px-2 py-1" style="font-size: 11px;" title="Anda login sebagai Admin">
+                    <i class="bi bi-shield-lock-fill me-1"></i>Admin
+                </span>
+            @endif
+            <a href="/akun" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-gear-fill me-1"></i> Kelola Char
+            </a>
+        </div>
     </div>
 
     @php
@@ -327,9 +336,21 @@
                                     </button>
                                 </form>
                             @else
-                                <button class="btn btn-secondary w-100 fw-bold" disabled>
-                                    <i class="bi bi-clock-history me-1"></i> Sedang Cooldown
-                                </button>
+                                <div class="d-flex gap-2">
+                                    <button class="btn btn-secondary flex-grow-1 fw-bold" disabled>
+                                        <i class="bi bi-clock-history me-1"></i> Sedang Cooldown
+                                        @if($cooldownText)
+                                            <span class="d-block small fw-normal text-white-50" style="font-size: 11px;">Tunggu {{ $cooldownText }} lagi</span>
+                                        @endif
+                                    </button>
+                                    {{-- Tombol Get Ready: Force reset cooldown semua char di KD ini --}}
+                                    <form action="/jadwal/kd/{{ $kd }}/force-ready" method="POST" class="m-0 form-force-ready">
+                                        @csrf
+                                        <button type="submit" class="btn btn-warning fw-bold px-3 h-100" title="Selesaikan lebih awal — reset cooldown semua char KD ini jadi siap panen sekarang!">
+                                            <i class="bi bi-check2-circle me-1"></i>Get Ready
+                                        </button>
+                                    </form>
+                                </div>
                             @endif
 
                             <div class="d-flex gap-1">
@@ -833,6 +854,52 @@
 
     updateFilterButtonStyles();
     applyFilters();
+
+    // 3. AJAX Handler untuk tombol Get Ready (Force Reset Cooldown KD)
+    document.querySelectorAll('form.form-force-ready').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            e.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Loading...';
+            }
+
+            try {
+                const formData = new FormData(form);
+                const response = await fetch(form.getAttribute('action'), {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                });
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    // Reload halaman dengan posisi scroll dijaga
+                    sessionStorage.setItem('satset_scroll_pos', window.scrollY);
+                    // Tampilkan toast singkat
+                    const toast = document.createElement('div');
+                    toast.className = 'alert alert-success alert-dismissible position-fixed shadow-lg border-0 fw-bold';
+                    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; font-size: 13px;';
+                    toast.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>${data.message}<button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => { window.location.reload(); }, 1000);
+                } else {
+                    alert(data.message || 'Gagal melakukan Get Ready');
+                    if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+                }
+            } catch (err) {
+                form.submit();
+            }
+        });
+    });
+
+    // 4. Restore scroll position after reload (satset UX)
+    const savedScroll = sessionStorage.getItem('satset_scroll_pos');
+    if (savedScroll) {
+        window.scrollTo(0, parseInt(savedScroll, 10));
+        sessionStorage.removeItem('satset_scroll_pos');
+    }
 })();
 </script>
 </body>

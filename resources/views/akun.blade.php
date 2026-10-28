@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="id">
 <head>
     <meta charset="UTF-8">
@@ -55,15 +55,24 @@
     @endauth
 </div>
 
+@php $isAdmin = $isAdmin ?? false; @endphp
+
 <div class="content">
     <div class="d-flex justify-content-between align-items-center mb-4">
         <div>
             <h3 class="fw-bold text-dark m-0">Manajemen Akun & Karakter (Ternak)</h3>
             <p class="text-muted small mb-0">Kelola akun Gmail, suntik karakter massal, dan monitoring per Kingdom</p>
         </div>
-        <a href="/jadwal" class="btn btn-outline-primary btn-sm">
-            <i class="bi bi-alarm me-1"></i> Ke Jadwal Farm
-        </a>
+        <div class="d-flex align-items-center gap-2">
+            @if($isAdmin)
+                <span class="badge bg-danger px-2 py-1" style="font-size: 11px;" title="Anda login sebagai Admin">
+                    <i class="bi bi-shield-lock-fill me-1"></i>Admin
+                </span>
+            @endif
+            <a href="/jadwal" class="btn btn-outline-primary btn-sm">
+                <i class="bi bi-alarm me-1"></i> Ke Jadwal Farm
+            </a>
+        </div>
     </div>
 
     @if(session('success'))
@@ -405,6 +414,7 @@
                                                                                 </button>
                                                                             </li>
                                                                             <li><hr class="dropdown-divider my-1"></li>
+                                                                            @if($isAdmin)
                                                                             <li>
                                                                                 <form action="/akun/char/{{ $char->id }}/hapus" method="POST" class="m-0" onsubmit="return confirm('Yakin hapus karakter {{ $char->ign }}?');">
                                                                                     @csrf
@@ -413,6 +423,13 @@
                                                                                     </button>
                                                                                 </form>
                                                                             </li>
+                                                                            @else
+                                                                            <li>
+                                                                                <span class="dropdown-item text-muted py-1" style="cursor: default; font-size: 12px;">
+                                                                                    <i class="bi bi-lock-fill me-2 text-secondary"></i> Hapus (Admin Only)
+                                                                                </span>
+                                                                            </li>
+                                                                            @endif
                                                                         </ul>
                                                                     </div>
                                                                 </div>
