@@ -110,15 +110,33 @@
                 <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center p-0" style="width: 28px; height: 28px; font-size: 12px;" data-bs-toggle="modal" data-bs-target="#modalSettingWA" title="Pengaturan Bot WA Fonnte">
                     <i class="bi bi-gear-fill"></i>
                 </button>
-                <div class="input-group input-group-sm" style="min-width: 120px; max-width: 180px;">
+                <div class="input-group input-group-sm position-relative" style="min-width: 130px; max-width: 190px;">
                     <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" id="inputSearchKD" class="form-control border-start-0" placeholder="Cari KD #...">
+                    <input type="text" id="inputSearchKD" name="search_kd_number_no_autofill" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" class="form-control border-start-0 border-end-0" placeholder="Cari KD #...">
+                    <button class="btn btn-outline-secondary border-start-0 d-none" type="button" id="btnClearSearchKD" title="Hapus pencarian">
+                        <i class="bi bi-x"></i>
+                    </button>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="row">
+    <div class="row" id="kd-card-container">
+        <!-- Empty State saat filter atau pencarian tidak menemukan KD -->
+        <div class="col-12 py-5 text-center text-muted d-none" id="kd-filter-empty">
+            <div class="mb-3">
+                <i class="bi bi-search fs-1 text-secondary opacity-75" id="empty-state-icon"></i>
+            </div>
+            <h5 class="fw-bold text-dark" id="empty-state-title">Tidak Ada Kingdom yang Sesuai</h5>
+            <p class="small text-muted mb-3 mx-auto" style="max-width: 480px;" id="empty-state-desc">
+                Tidak ada data Kingdom yang cocok dengan filter atau pencarian saat ini.
+            </p>
+            <div class="d-flex justify-content-center gap-2 flex-wrap" id="empty-state-actions">
+                <button type="button" class="btn btn-sm btn-dark rounded-pill px-3" id="btnResetFilterToAll">
+                    <i class="bi bi-grid-fill me-1"></i> Tampilkan Semua KD ({{ count($groupedByKD) }})
+                </button>
+            </div>
+        </div>
         @forelse ($groupedByKD as $kd => $chars)
             @php
                 $kdCooldownHours = isset($kingdoms[$kd]) ? (float)$kingdoms[$kd]->cooldown_hours : 4.0;
@@ -262,19 +280,27 @@
                                             <div class="text-muted small fw-bold text-truncate"><i class="bi bi-person-fill text-primary"></i> {{ $wName }}</div>
                                             <div class="fs-4 fw-bold text-primary my-1">{{ $wCount }}<span class="fs-6 text-muted fw-normal">x</span></div>
                                             <div class="d-flex justify-content-center gap-1">
-                                                <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0">
+                                                <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0 form-adjust-log">
                                                     @csrf
                                                     <input type="hidden" name="worker_name" value="{{ $wName }}">
                                                     <input type="hidden" name="action" value="decrement">
-                                                    <button type="submit" class="btn btn-xs btn-outline-danger" title="Kurangi 1 (-1)" {{ $wCount <= 0 ? 'disabled' : '' }}>
+                                                    <button type="submit" class="btn btn-xs btn-outline-danger btn-decrement" title="Kurangi 1 (-1)" {{ $wCount <= 0 ? 'disabled' : '' }}>
                                                         -1
                                                     </button>
                                                 </form>
-                                                <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0" onsubmit="return confirm('Reset log {{ $wName }} di KD #{{ $kd }} jadi 0?');">
+                                                <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0 form-adjust-log">
+                                                    @csrf
+                                                    <input type="hidden" name="worker_name" value="{{ $wName }}">
+                                                    <input type="hidden" name="action" value="increment">
+                                                    <button type="submit" class="btn btn-xs btn-outline-success btn-increment" title="Tambah 1 (+1)">
+                                                        +1
+                                                    </button>
+                                                </form>
+                                                <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0 form-adjust-log" data-confirm="Reset log {{ $wName }} di KD #{{ $kd }} jadi 0?">
                                                     @csrf
                                                     <input type="hidden" name="worker_name" value="{{ $wName }}">
                                                     <input type="hidden" name="action" value="reset">
-                                                    <button type="submit" class="btn btn-xs btn-outline-secondary" title="Reset ke 0">
+                                                    <button type="submit" class="btn btn-xs btn-outline-secondary btn-reset" title="Reset ke 0">
                                                         <i class="bi bi-arrow-counterclockwise"></i>
                                                     </button>
                                                 </form>
@@ -406,6 +432,7 @@
                                 <div class="mb-3">
                                     <label class="form-label small fw-bold text-muted">AKSI</label>
                                     <select name="action" class="form-select form-select-sm" onchange="document.getElementById('customInputKD{{ $kd }}').classList.toggle('d-none', this.value !== 'set')">
+                                        <option value="increment">Tambah 1 (+1)</option>
                                         <option value="decrement">Kurangi 1 (-1)</option>
                                         <option value="reset">Reset Jadi 0</option>
                                         <option value="set">Atur Angka Tertentu (Custom)</option>

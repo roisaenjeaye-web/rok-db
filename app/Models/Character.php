@@ -46,6 +46,8 @@ class Character extends Model
 
         if ($action === 'decrement') {
             $stats[$worker] = max(0, ($stats[$worker] ?? 0) - 1);
+        } elseif ($action === 'increment') {
+            $stats[$worker] = ($stats[$worker] ?? 0) + 1;
         } elseif ($action === 'reset') {
             $stats[$worker] = 0;
         } elseif ($action === 'set') {

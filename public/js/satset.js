@@ -166,15 +166,17 @@
     }
 
     function initSatsetButtons() {
-        // A. Intercept Form Adjust Log (-1 / Reset) di Jadwal -> Instan Tanpa Reload
+        // A. Intercept Form Adjust Log (-1 / +1 / Reset) di Jadwal -> Instan Tanpa Reload
         document.querySelectorAll('form[action*="/adjust-log"]').forEach(form => {
             if (form.dataset.satsetBound) return;
             form.dataset.satsetBound = 'true';
 
             form.addEventListener('submit', async function (e) {
-                // Jika form punya onsubmit confirm (misal reset), konfirmasi tetap jalan
-                if (form.getAttribute('onsubmit') && !window.confirmActionHandled) {
-                    // browser bawaan sudah handle confirm, jika cancel browser stop submit otomatis
+                // Konfirmasi aman via data-confirm
+                const confirmMsg = form.getAttribute('data-confirm');
+                if (confirmMsg && !window.confirm(confirmMsg)) {
+                    e.preventDefault();
+                    return;
                 }
 
                 e.preventDefault();
@@ -208,8 +210,8 @@
                             if (countEl) {
                                 countEl.innerHTML = `${data.farm_count}<span class="fs-6 text-muted fw-normal">x</span>`;
                             }
-                            // Atur tombol -1 disabled jika sudah 0
-                            const decBtn = parentBox.querySelector('button[title*="Kurangi"]');
+                            // Atur tombol -1 disabled jika sudah 0, dan hidupkan jika > 0
+                            const decBtn = parentBox.querySelector('button.btn-decrement, button[title*="Kurangi"]');
                             if (decBtn) {
                                 decBtn.disabled = (data.farm_count <= 0);
                             }
@@ -222,14 +224,20 @@
                         showSatsetToast(data.message || 'Gagal memproses permintaan', 'danger');
                     }
                 } catch (err) {
-                    // Fallback jika fetch bermasalah: submit form secara normal tanpa bentrok DOM
+                    // Fallback jika fetch bermasalah: submit form secara normal
                     HTMLFormElement.prototype.submit.call(form);
                     return;
                 } finally {
                     if (btn) {
                         btn.classList.remove('btn-satset-loading');
                         btn.innerHTML = originalHtml;
-                        btn.disabled = false;
+                        const parentBox = form.closest('.bg-white.p-2');
+                        if (btn.classList.contains('btn-decrement') && parentBox) {
+                            const currentNum = parseInt(parentBox.querySelector('.fs-4.fw-bold')?.innerText || '0', 10);
+                            btn.disabled = (currentNum <= 0);
+                        } else if (!btn.classList.contains('btn-decrement')) {
+                            btn.disabled = false;
+                        }
                     }
                 }
             });
@@ -403,7 +411,7 @@
 
     // 2. Real-time Ticking Countdown Timer (Otomatis update detik & unlock jika siap)
     function initLiveCountdowns() {
-        const timerEls = document.querySelectorAll('[data-target-time]');
+        const timerEls = document.querySelectorAll('span[data-target-time]');
         if (timerEls.length === 0) return;
 
         function updateTimers() {
@@ -463,14 +471,57 @@
     function initKdFilters() {
         const filterBtns = document.querySelectorAll('.btn-filter-kd');
         const searchInput = document.getElementById('inputSearchKD');
+        const clearSearchBtn = document.getElementById('btnClearSearchKD');
         const cards = document.querySelectorAll('.kd-card-wrapper');
+        const emptyState = document.getElementById('kd-filter-empty');
+        const emptyIcon = document.getElementById('empty-state-icon');
+        const emptyTitle = document.getElementById('empty-state-title');
+        const emptyDesc = document.getElementById('empty-state-desc');
+        const resetFilterBtn = document.getElementById('btnResetFilterToAll');
 
         if (cards.length === 0) return;
 
         let activeFilter = 'all';
-        let searchQuery = '';
+
+        // Bersihkan otomatis jika browser mengautofill email ke input cari KD
+        if (searchInput) {
+            const val = (searchInput.value || '').trim();
+            if (val.includes('@') || val.includes('.com') || val.includes('.net')) {
+                searchInput.value = '';
+            }
+        }
+
+        function updateFilterButtonStyles() {
+            filterBtns.forEach(btn => {
+                const filter = btn.getAttribute('data-filter');
+                btn.classList.remove('active', 'btn-dark', 'btn-danger', 'btn-secondary', 'btn-outline-dark', 'btn-outline-danger', 'btn-outline-secondary');
+
+                if (filter === activeFilter) {
+                    btn.classList.add('active');
+                    if (filter === 'all') btn.classList.add('btn-dark');
+                    else if (filter === 'ready') btn.classList.add('btn-danger');
+                    else if (filter === 'cooldown') btn.classList.add('btn-secondary');
+                } else {
+                    if (filter === 'all') btn.classList.add('btn-outline-secondary');
+                    else if (filter === 'ready') btn.classList.add('btn-outline-danger');
+                    else if (filter === 'cooldown') btn.classList.add('btn-outline-secondary');
+                }
+            });
+        }
 
         function applyFilters() {
+            let visibleCount = 0;
+            const currentSearch = searchInput ? searchInput.value.trim().toLowerCase().replace('#', '') : '';
+
+            // Tampilkan tombol silang jika ada teks pencarian
+            if (clearSearchBtn) {
+                if (currentSearch.length > 0) {
+                    clearSearchBtn.classList.remove('d-none');
+                } else {
+                    clearSearchBtn.classList.add('d-none');
+                }
+            }
+
             cards.forEach(card => {
                 const kdNum = (card.getAttribute('data-kd') || '').toLowerCase();
                 const hasReady = card.getAttribute('data-has-ready') === 'true';
@@ -483,38 +534,84 @@
                 }
 
                 let matchSearch = true;
-                if (searchQuery) {
-                    matchSearch = kdNum.includes(searchQuery);
+                if (currentSearch) {
+                    matchSearch = kdNum.includes(currentSearch);
                 }
 
                 if (matchFilter && matchSearch) {
                     card.classList.remove('d-none');
+                    visibleCount++;
                 } else {
                     card.classList.add('d-none');
                 }
             });
+
+            // Handle Banner Kosong (Empty State) jika tidak ada kartu yang cocok
+            if (emptyState) {
+                if (visibleCount === 0) {
+                    emptyState.classList.remove('d-none');
+                    if (currentSearch) {
+                        if (emptyIcon) emptyIcon.className = 'bi bi-search fs-1 text-secondary opacity-75';
+                        if (emptyTitle) emptyTitle.innerText = `Tidak ada Kingdom yang cocok dengan "${currentSearch}"`;
+                        if (emptyDesc) emptyDesc.innerText = 'Pastikan nomor Kingdom yang dicari benar (contoh: 2359 atau 3868).';
+                    } else if (activeFilter === 'ready') {
+                        if (emptyIcon) emptyIcon.className = 'bi bi-clock-history fs-1 text-warning opacity-75';
+                        if (emptyTitle) emptyTitle.innerText = 'Semua Kingdom Sedang Masa Jeda (Cooldown)';
+                        if (emptyDesc) emptyDesc.innerText = 'Belum ada akun farm yang siap panen saat ini. Silakan klik tombol di bawah untuk melihat KD yang sedang cooldown atau semua KD.';
+                    } else if (activeFilter === 'cooldown') {
+                        if (emptyIcon) emptyIcon.className = 'bi bi-check-circle fs-1 text-success opacity-75';
+                        if (emptyTitle) emptyTitle.innerText = 'Tidak Ada Kingdom yang Sedang Cooldown';
+                        if (emptyDesc) emptyDesc.innerText = 'Semua Kingdom sudah siap panen!';
+                    }
+                } else {
+                    emptyState.classList.add('d-none');
+                }
+            }
         }
+
+        window.Satset = window.Satset || {};
+        window.Satset.setFilter = function (filter) {
+            activeFilter = filter;
+            updateFilterButtonStyles();
+            applyFilters();
+        };
+
+        window.Satset.clearSearch = function () {
+            if (searchInput) {
+                searchInput.value = '';
+            }
+            if (clearSearchBtn) {
+                clearSearchBtn.classList.add('d-none');
+            }
+            applyFilters();
+        };
 
         filterBtns.forEach(btn => {
             btn.addEventListener('click', function () {
-                filterBtns.forEach(b => {
-                    b.classList.remove('active', 'btn-dark');
-                    b.classList.add('btn-outline-secondary');
-                });
-                this.classList.add('active', 'btn-dark');
-                this.classList.remove('btn-outline-secondary');
-
                 activeFilter = this.getAttribute('data-filter') || 'all';
+                updateFilterButtonStyles();
                 applyFilters();
             });
         });
 
         if (searchInput) {
-            searchInput.addEventListener('input', function () {
-                searchQuery = this.value.trim().toLowerCase().replace('#', '');
-                applyFilters();
+            searchInput.addEventListener('input', applyFilters);
+        }
+
+        if (clearSearchBtn) {
+            clearSearchBtn.addEventListener('click', window.Satset.clearSearch);
+        }
+
+        if (resetFilterBtn) {
+            resetFilterBtn.addEventListener('click', function () {
+                window.Satset.clearSearch();
+                window.Satset.setFilter('all');
             });
         }
+
+        // Terapkan filter awal
+        updateFilterButtonStyles();
+        applyFilters();
     }
 
     // 4. Salin Format Pesanan WhatsApp Profesional (1-Click)

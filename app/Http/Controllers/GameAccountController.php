@@ -589,12 +589,12 @@ class GameAccountController extends Controller
         return redirect()->away($waUrl);
     }
 
-    // Fitur Kurangi / Reset / Atur Angka Log per KD
+    // Fitur Kurangi / Tambah / Reset / Atur Angka Log per KD
     public function adjustKdLog(Request $request, $kd)
     {
         $request->validate([
             'worker_name' => 'required|string',
-            'action' => 'required|in:decrement,reset,set',
+            'action' => 'required|in:decrement,increment,reset,set',
             'custom_count' => 'nullable|numeric|min:0',
         ]);
 
@@ -605,6 +605,8 @@ class GameAccountController extends Controller
         $stat = DB::transaction(function () use ($kd, $worker, $action, $customCount, $request) {
             if ($action === 'decrement') {
                 $s = KdFarmerStat::decrementCount((int)$kd, $worker, 1);
+            } elseif ($action === 'increment') {
+                $s = KdFarmerStat::incrementCount((int)$kd, $worker, 1);
             } elseif ($action === 'reset') {
                 $s = KdFarmerStat::setCount((int)$kd, $worker, 0);
             } else {
@@ -624,6 +626,8 @@ class GameAccountController extends Controller
 
         if ($action === 'decrement') {
             $msg = "Log farm {$worker} di KD #{$kd} dikurangi 1. Sekarang: {$stat->farm_count}x.";
+        } elseif ($action === 'increment') {
+            $msg = "Log farm {$worker} di KD #{$kd} ditambah 1. Sekarang: {$stat->farm_count}x.";
         } elseif ($action === 'reset') {
             $msg = "Log farm {$worker} di KD #{$kd} berhasil di-reset ke 0.";
         } else {
