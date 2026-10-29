@@ -158,8 +158,8 @@ Route::middleware('auth')->group(function () {
 });
 
 // Webhook Fonnte untuk menerima balasan chat WhatsApp dari member grup / user (tanpa CSRF & tanpa auth)
-Route::post('/api/fonnte/webhook', [BotNotificationController::class, 'handleWebhook']);
-Route::post('/bot/webhook', [BotNotificationController::class, 'handleWebhook']);
+Route::match(['get', 'post'], '/api/fonnte/webhook', [BotNotificationController::class, 'handleWebhook']);
+Route::match(['get', 'post'], '/bot/webhook', [BotNotificationController::class, 'handleWebhook']);
 
 // Trigger Cron Bot Pengingat / Spam (dipanggil GitHub Actions setiap 5 menit)
 // Dilindungi BOT_CRON_SECRET agar tidak bisa di-spam orang lain

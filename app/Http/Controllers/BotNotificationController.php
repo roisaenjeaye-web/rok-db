@@ -212,10 +212,14 @@ class BotNotificationController extends Controller
 
         $targetPhone = (string) BotSetting::get('target_phone', '');
         if (!empty($targetPhone)) {
+            $cleanTarget = str_replace(['@g.us', '@c.us', '@s.whatsapp.net'], '', $targetPhone);
+            $cleanSender = str_replace(['@g.us', '@c.us', '@s.whatsapp.net'], '', $sender);
+            $cleanMember = str_replace(['@g.us', '@c.us', '@s.whatsapp.net'], '', $member);
+
             // Validasi apakah pesan berasal dari grup target atau member grup target
-            $isTargetGroup = ($sender === $targetPhone);
-            $isTargetDirect = ($member && str_contains($targetPhone, $member));
-            $isSenderDirect = ($sender === $targetPhone);
+            $isTargetGroup = ($cleanSender === $cleanTarget) || str_contains($targetPhone, $sender) || (!empty($cleanSender) && str_contains($sender, $cleanTarget));
+            $isTargetDirect = ($member && str_contains($targetPhone, $member)) || (!empty($cleanMember) && str_contains($cleanTarget, $cleanMember));
+            $isSenderDirect = ($sender === $targetPhone) || (!empty($cleanSender) && $cleanSender === $cleanTarget);
 
             if (!$isTargetGroup && !$isTargetDirect && !$isSenderDirect) {
                 return response()->json(['status' => true, 'message' => 'Pesan dari luar target diabaikan']);
