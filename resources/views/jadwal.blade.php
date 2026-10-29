@@ -228,7 +228,7 @@
                             @else
                                 <div class="alert alert-warning py-1 px-2 mb-2 d-flex justify-content-between align-items-center rounded-2 border-0 shadow-xs" style="font-size: 11px;">
                                     <span class="text-truncate me-1 text-dark">
-                                        <i class="bi bi-bell-fill text-warning me-1"></i> Belum Dibalas (Spam 10m)
+                                        <i class="bi bi-bell-fill text-warning me-1"></i> Belum Dibalas (Spam 5m)
                                     </span>
                                     <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2 py-0 fw-bold btn-ack-kd" data-kd="{{ $kd }}" title="Tandai Anda sedang mengerjakan KD ini">
                                         <i class="bi bi-hand-thumbs-up me-1"></i>Saya OTW
@@ -633,7 +633,7 @@
                             <i class="bi bi-shield-check text-success me-1 fs-6"></i> Aturan Spam & Anti-Lupa Bot:
                         </div>
                         <ul class="mb-0 ps-3" style="font-size: 11px;">
-                            <li><b>Belum Dibalas:</b> Jika tidak ada yang membalas chat WA bot, bot otomatis <b>spam setiap 10 menit sekali</b>.</li>
+                            <li><b>Belum Dibalas:</b> Jika tidak ada yang membalas chat WA bot, bot otomatis <b>spam setiap 5 menit sekali</b>.</li>
                             <li><b>Sudah Dibalas:</b> Saat ada balasan WA (misal "otw") atau klik <i>Saya OTW</i> di web, bot memberi waktu <b>30 menit</b> untuk menyelesaikan panen.</li>
                             <li><b>Overdue (> 30 Menit):</b> Jika dalam 30 menit belum dikelarin/diceklis di web, bot otomatis <b>spam setiap 5 menit sekali</b> sampai selesai panen!</li>
                         </ul>

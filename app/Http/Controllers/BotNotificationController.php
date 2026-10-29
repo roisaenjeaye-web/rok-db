@@ -87,7 +87,7 @@ class BotNotificationController extends Controller
         $nowStr = now()->setTimezone('Asia/Jakarta')->format('d M Y, H:i') . ' WIB';
         $testMsg = "🤖 *TES BOT WHATSAPP RoK JOKI BERHASIL!* 🚀\n";
         $testMsg .= "━━━━━━━━━━━━━━━━━\n";
-        $testMsg .= "✅ Sistem Bot Fonnte berhasil terhubung & siap mengirim pengingat panen otomatis serta sistem anti-lupa (spam 10m / 5m)!\n";
+        $testMsg .= "✅ Sistem Bot Fonnte berhasil terhubung & siap mengirim pengingat panen otomatis serta sistem anti-lupa (spam 5m)!\n";
         $testMsg .= "📅 Waktu: {$nowStr}\n";
         $testMsg .= "@all\n";
         $testMsg .= "━━━━━━━━━━━━━━━━━\n";
@@ -181,7 +181,7 @@ class BotNotificationController extends Controller
             $msg .= "⏱️ *Tenggat Waktu:* 30 Menit dari sekarang\n";
             $msg .= "━━━━━━━━━━━━━━━━━\n";
             $msg .= "🔗 *Buka Dashboard:* " . $this->getDashboardUrl() . "\n";
-            $msg .= "_Spam pengingat 10 menit dijeda. Selesaikan panen sebelum spam 5 menit aktif!_ 🌾🚜";
+            $msg .= "_Spam pengingat 5 menit dijeda. Selesaikan panen sebelum spam overdue aktif!_ 🌾🚜";
 
             FonnteService::sendMessage($targetPhone, $msg);
         }
@@ -308,7 +308,7 @@ class BotNotificationController extends Controller
      *
      * Alur yang benar:
      *  1. KD siap panen dan last_notified_at null -> kirim notif awal SEGERA
-     *  2. Belum dibalas dan >= 10 menit sejak notif terakhir -> spam 10 menit
+     *  2. Belum dibalas dan >= 4-5 menit sejak notif terakhir -> spam 5 menit
      *  3. Sudah dibalas dan >= 30 menit belum diceklis dan >= 5 menit sejak notif terakhir -> spam 5 menit
      *  4. Guard 2 menit: cegah double-fire dari concurrent heartbeat browser
      *  5. Deteksi siklus baru: jika char baru saja di-farm, reset state notifikasi
@@ -400,7 +400,7 @@ class BotNotificationController extends Controller
 
             // KASUS 1: Belum dibalas (replied_at == null)
             // last_notified null -> notif awal SEGERA
-            // last_notified ada dan >= 10 menit -> spam 10 menit
+            // last_notified ada dan >= 4 menit -> spam 5 menit (dengan buffer cron)
             if ($repliedAt === null) {
                 $shouldSend = false;
                 $isSpam     = false;
@@ -411,14 +411,14 @@ class BotNotificationController extends Controller
                     $isSpam     = false;
                 } else {
                     $minsElapsed = (int) now()->diffInMinutes($lastNotified, true);
-                    if ($minsElapsed >= 10) {
+                    if ($minsElapsed >= 4) {
                         $shouldSend = true;
                         $isSpam     = true;
                     }
                 }
 
                 if ($shouldSend) {
-                    $msg = self::buildReadyOrSpam10Text($kd, $readyCount, $kChars->count(), $cooldownHours, $kingdom, $isSpam, $worker);
+                    $msg = self::buildReadyOrSpam5Text($kd, $readyCount, $kChars->count(), $cooldownHours, $kingdom, $isSpam, $worker);
                     $res = FonnteService::sendMessage($phone, $msg, $token);
 
                     if ($res['success']) {
@@ -429,7 +429,7 @@ class BotNotificationController extends Controller
                         $notifiedKds[] = [
                             'kd'             => $kd,
                             'ready_count'    => $readyCount,
-                            'type'           => $isSpam ? 'spam_10m_unreplied' : 'initial_ready',
+                            'type'           => $isSpam ? 'spam_5m_unreplied' : 'initial_ready',
                             'reminder_count' => $kingdom->reminder_count,
                         ];
                     }
@@ -476,14 +476,14 @@ class BotNotificationController extends Controller
         ];
     }
 
-    // Format pesan: Notif Siap Panen Pertama atau Spam 10 Menit jika belum dibalas
-    protected static function buildReadyOrSpam10Text($kd, $readyCount, $totalChars, $cooldownHours, $kingdom, $isSpam, $worker)
+    // Format pesan: Notif Siap Panen Pertama atau Spam 5 Menit jika belum dibalas
+    protected static function buildReadyOrSpam5Text($kd, $readyCount, $totalChars, $cooldownHours, $kingdom, $isSpam, $worker)
     {
         $currentUrl = self::resolveDashboardUrl();
         $cdStr = ((float)$cooldownHours == (int)$cooldownHours) ? (int)$cooldownHours : $cooldownHours;
 
         if ($isSpam) {
-            $minsSinceReady = $kingdom->ready_since ? abs((int) round(now()->diffInMinutes($kingdom->ready_since))) : 10;
+            $minsSinceReady = $kingdom->ready_since ? abs((int) round(now()->diffInMinutes($kingdom->ready_since))) : 5;
             $count = ($kingdom->reminder_count ?? 0) + 1;
 
             $text = "⚠️ *SPAM PENGINGAT #{$count} (BELUM ADA BALASAN)* ⚠️\n";
@@ -496,7 +496,7 @@ class BotNotificationController extends Controller
             $text .= "@all\n";
             $text .= "━━━━━━━━━━━━━━━━━\n";
             $text .= "🔗 *Buka Dashboard:* {$currentUrl}\n";
-            $text .= "💬 _Ketik balasan di WA (contoh: 'otw' / 'siap') untuk mematikan spam 10 menit ini!_ ⏰";
+            $text .= "💬 _Ketik balasan di WA (contoh: 'otw' / 'siap') untuk mematikan spam 5 menit ini!_ ⏰";
         } else {
             $text = "🚨 *PANGGILAN PANEN FARM RoK (AUTO BOT)* 🚨\n";
             $text .= "━━━━━━━━━━━━━━━━━\n";
@@ -507,7 +507,7 @@ class BotNotificationController extends Controller
             $text .= "@all\n";
             $text .= "━━━━━━━━━━━━━━━━━\n";
             $text .= "🔗 *Buka Dashboard:* {$currentUrl}\n";
-            $text .= "💬 _Balas chat ini di grup (misal: 'otw') agar bot tidak spam tiap 10 menit!_ 🌾🚜";
+            $text .= "💬 _Balas chat ini di grup (misal: 'otw') agar bot tidak spam tiap 5 menit!_ 🌾🚜";
         }
 
         return $text;
@@ -553,7 +553,7 @@ class BotNotificationController extends Controller
             $text .= "@all\n";
             $text .= "━━━━━━━━━━━━━━━━━\n";
             $text .= "🔗 *Buka Dashboard:* {$currentUrl}\n";
-            $text .= "💬 _Balas chat ini di grup (misal: 'otw') agar bot tidak spam tiap 10 menit!_ 🌾🚜";
+            $text .= "💬 _Balas chat ini di grup (misal: 'otw') agar bot tidak spam tiap 5 menit!_ 🌾🚜";
         } else {
             $sisaMenit = abs((int) round(now()->diffInMinutes($maxCooldownEnd)));
             $jam = floor($sisaMenit / 60);

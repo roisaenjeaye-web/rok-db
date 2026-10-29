@@ -1202,8 +1202,8 @@
                 const data = await res.json();
                 if (data.success && data.notified_count > 0) {
                     data.notified_kds.forEach(item => {
-                        if (item.type === 'spam_10m_unreplied') {
-                            showSatsetToast(`⚠️ <b>[Bot WA Fonnte]</b> Spam 10 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (${item.ready_count} char) karena belum dibalas!`, 'warning');
+                        if (item.type === 'spam_10m_unreplied' || item.type === 'spam_5m_unreplied') {
+                            showSatsetToast(`⚠️ <b>[Bot WA Fonnte]</b> Spam 5 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (${item.ready_count} char) karena belum dibalas!`, 'warning');
                         } else if (item.type === 'spam_5m_overdue') {
                             showSatsetToast(`🔥 <b>[Bot WA Fonnte]</b> Spam Overdue 5 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (> 30m belum diceklis)!`, 'danger');
                         } else {
