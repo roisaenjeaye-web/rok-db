@@ -276,9 +276,11 @@
                                     <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none small text-primary me-1" data-bs-toggle="modal" data-bs-target="#modalCooldownKD{{ $kd }}">
                                         <i class="bi bi-clock"></i> Jeda
                                     </button>
+                                    @if($isAdmin)
                                     <button type="button" class="btn btn-sm btn-link p-0 text-decoration-none small text-muted" data-bs-toggle="modal" data-bs-target="#modalAdjustKD{{ $kd }}">
                                         <i class="bi bi-sliders"></i> Log
                                     </button>
+                                    @endif
                                 </div>
                             </div>
                             
@@ -293,6 +295,7 @@
                                         <div class="bg-white p-2 rounded border text-center shadow-xs">
                                             <div class="text-muted small fw-bold text-truncate"><i class="bi bi-person-fill text-primary"></i> {{ $wName }}</div>
                                             <div class="fs-4 fw-bold text-primary my-1">{{ $wCount }}<span class="fs-6 text-muted fw-normal">x</span></div>
+                                            @if($isAdmin)
                                             <div class="d-flex justify-content-center gap-1">
                                                 <form action="/jadwal/kd/{{ $kd }}/adjust-log" method="POST" class="m-0 form-adjust-log">
                                                     @csrf
@@ -319,6 +322,11 @@
                                                     </button>
                                                 </form>
                                             </div>
+                                            @else
+                                            <div class="text-muted small py-1" style="font-size: 11px;">
+                                                <i class="bi bi-shield-check text-success me-1"></i> Terverifikasi
+                                            </div>
+                                            @endif
                                         </div>
                                     </div>
                                 @empty
@@ -871,6 +879,12 @@
     // 3. AJAX Handler untuk tombol Get Ready (Force Reset Cooldown KD)
     document.querySelectorAll('form.form-force-ready').forEach(form => {
         form.addEventListener('submit', async function(e) {
+            if (form.dataset.submitting === 'true') {
+                e.preventDefault();
+                return;
+            }
+            form.dataset.submitting = 'true';
+
             e.preventDefault();
             const btn = form.querySelector('button[type="submit"]');
             const originalHtml = btn ? btn.innerHTML : '';
@@ -888,20 +902,20 @@
                 });
                 const data = await response.json();
                 if (response.ok && data.success) {
-                    // Reload halaman dengan posisi scroll dijaga
                     sessionStorage.setItem('satset_scroll_pos', window.scrollY);
-                    // Tampilkan toast singkat
                     const toast = document.createElement('div');
                     toast.className = 'alert alert-success alert-dismissible position-fixed shadow-lg border-0 fw-bold';
                     toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px; font-size: 13px;';
                     toast.innerHTML = `<i class="bi bi-check-circle-fill me-2"></i>${data.message}<button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>`;
                     document.body.appendChild(toast);
-                    setTimeout(() => { window.location.reload(); }, 1000);
+                    setTimeout(() => { window.location.reload(); }, 500);
                 } else {
+                    form.dataset.submitting = 'false';
                     alert(data.message || 'Gagal melakukan Get Ready');
                     if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
                 }
             } catch (err) {
+                form.dataset.submitting = 'false';
                 form.submit();
             }
         });

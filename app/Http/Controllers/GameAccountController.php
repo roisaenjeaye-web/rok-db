@@ -624,9 +624,18 @@ class GameAccountController extends Controller
         return redirect()->away($waUrl);
     }
 
-    // Fitur Kurangi / Tambah / Reset / Atur Angka Log per KD
+    // Fitur Kurangi / Tambah / Reset / Atur Angka Log per KD (Khusus Admin)
     public function adjustKdLog(Request $request, $kd)
     {
+        // Hanya Admin yang boleh mengubah atau mereset jumlah hitungan macul
+        if (!auth()->check() || !auth()->user()->isAdmin()) {
+            $msg = '❌ Akses ditolak! Hanya Admin yang berhak mengubah atau mereset jumlah macul.';
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 403);
+            }
+            return back()->with('error', $msg);
+        }
+
         $request->validate([
             'worker_name' => 'required|string',
             'action' => 'required|in:decrement,increment,reset,set',
@@ -681,7 +690,7 @@ class GameAccountController extends Controller
         return back()->with('success', $msg);
     }
 
-    // Fitur Kurangi / Reset / Atur Angka Log per Karakter
+    // Fitur Kurangi / Reset / Atur Angka Log per Karakter (Log Admin Only, Reset Cooldown Semua User)
     public function adjustCharLog(Request $request, $id)
     {
         $request->validate([
@@ -690,9 +699,19 @@ class GameAccountController extends Controller
             'custom_count' => 'nullable|numeric|min:0',
         ]);
 
+        $action = $request->input('action');
+
+        // Jika mengubah hitungan macul (bukan cuma reset jeda), wajib Admin
+        if ($action !== 'reset_cooldown' && (!auth()->check() || !auth()->user()->isAdmin())) {
+            $msg = '❌ Akses ditolak! Hanya Admin yang berhak mengubah jumlah hitungan macul karakter.';
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 403);
+            }
+            return back()->with('error', $msg);
+        }
+
         $char = Character::findOrFail($id);
         $worker = $request->input('worker_name', $this->getActiveWorker());
-        $action = $request->input('action');
         $customCount = (int) $request->input('custom_count', 0);
 
         if ($action === 'reset_cooldown') {
@@ -718,12 +737,12 @@ class GameAccountController extends Controller
         return back()->with('success', $msg);
     }
 
-    // Fitur Force Ready: Reset Cooldown SEMUA Char di satu KD sekaligus (Get Ready)
+    // Fitur Force Ready: Reset Cooldown SEMUA Char di satu KD sekaligus (Get Ready) - Atomic & Super Satset
     public function forceReadyKd(Request $request, $kd)
     {
-        $chars = Character::where('kd_number', $kd)->get();
+        $charsCount = Character::where('kd_number', $kd)->count();
 
-        if ($chars->isEmpty()) {
+        if ($charsCount === 0) {
             $msg = "Tidak ada karakter di KD #{$kd}.";
             if ($request->ajax() || $request->wantsJson()) {
                 return response()->json(['success' => false, 'message' => $msg], 404);
@@ -731,33 +750,29 @@ class GameAccountController extends Controller
             return back()->with('error', $msg);
         }
 
-        $count = 0;
-        foreach ($chars as $char) {
-            if ($char->last_farmed_at !== null) {
-                $char->last_farmed_at = null;
-                $char->save();
-                $count++;
+        DB::transaction(function () use ($kd) {
+            // Update langsung atomic 1 query SQL (10ms instan tanpa lag looping save)
+            Character::where('kd_number', $kd)->update(['last_farmed_at' => null]);
+
+            // Reset tracking notif KD juga
+            $kingdom = Kingdom::where('kd_number', $kd)->first();
+            if ($kingdom) {
+                $kingdom->replied_at = null;
+                $kingdom->replied_by = null;
+                $kingdom->ready_since = null;
+                $kingdom->reminder_count = 0;
+                $kingdom->save();
             }
-        }
+        });
 
-        // Reset tracking notif KD juga
-        $kingdom = Kingdom::where('kd_number', $kd)->first();
-        if ($kingdom) {
-            $kingdom->replied_at = null;
-            $kingdom->replied_by = null;
-            $kingdom->ready_since = null;
-            $kingdom->reminder_count = 0;
-            $kingdom->save();
-        }
-
-        $msg = "✅ {$count} Char di KD #{$kd} berhasil di-Get Ready (cooldown direset, siap panen sekarang)!";
+        $msg = "✅ {$charsCount} Char di KD #{$kd} berhasil di-Get Ready (cooldown direset, siap panen sekarang)!";
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
                 'success' => true,
                 'message' => $msg,
                 'kd_number' => (int) $kd,
-                'reset_count' => $count,
+                'reset_count' => $charsCount,
             ]);
         }
 

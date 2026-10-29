@@ -249,6 +249,12 @@
             form.dataset.satsetBound = 'true';
 
             form.addEventListener('submit', async function (e) {
+                if (form.dataset.submitting === 'true') {
+                    e.preventDefault();
+                    return;
+                }
+                form.dataset.submitting = 'true';
+
                 e.preventDefault();
                 const btn = form.querySelector('button[type="submit"]');
                 const originalHtml = btn ? btn.innerHTML : '';
@@ -277,6 +283,7 @@
                         sessionStorage.setItem('satset_scroll_pos', window.scrollY);
                         window.location.reload();
                     } else {
+                        form.dataset.submitting = 'false';
                         showSatsetToast(data.message || 'Gagal panen', 'danger');
                         if (btn) {
                             btn.classList.remove('btn-satset-loading');
@@ -285,6 +292,7 @@
                         }
                     }
                 } catch (err) {
+                    form.dataset.submitting = 'false';
                     HTMLFormElement.prototype.submit.call(form);
                 }
             });
