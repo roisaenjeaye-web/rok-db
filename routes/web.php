@@ -20,6 +20,60 @@ Route::get('/ping-version', function () {
     ]);
 });
 
+Route::get('/api/bot/debug', function () {
+    $isAuto = (bool) \App\Models\BotSetting::get('is_auto_notify', true);
+    $phone = \App\Models\BotSetting::get('target_phone');
+    $token = \App\Models\BotSetting::get('fonnte_token');
+
+    $groupedByKD = \App\Models\Character::with('gameAccount')->get()->groupBy('kd_number')->sortKeys();
+    $kingdoms = \App\Models\Kingdom::all()->keyBy('kd_number');
+
+    $diagnostics = [];
+    foreach ($groupedByKD as $kd => $kChars) {
+        $kingdom = $kingdoms->get($kd);
+        $cooldownHours = $kingdom ? (float) $kingdom->cooldown_hours : 4.0;
+        $cooldownMinutes = (int) round($cooldownHours * 60);
+
+        $readyCount = 0;
+        $latestFarmedAt = null;
+
+        foreach ($kChars as $c) {
+            if ($c->last_farmed_at) {
+                if ($latestFarmedAt === null || $c->last_farmed_at->greaterThan($latestFarmedAt)) {
+                    $latestFarmedAt = $c->last_farmed_at;
+                }
+            }
+            if (!$c->last_farmed_at || now()->greaterThanOrEqualTo($c->last_farmed_at->copy()->addMinutes($cooldownMinutes))) {
+                $readyCount++;
+            }
+        }
+
+        $lastNotified = $kingdom ? $kingdom->last_notified_at : null;
+        $repliedAt = $kingdom ? $kingdom->replied_at : null;
+
+        $diagnostics[] = [
+            'kd' => $kd,
+            'total_chars' => $kChars->count(),
+            'ready_count' => $readyCount,
+            'latest_farmed_at' => $latestFarmedAt ? $latestFarmedAt->toIso8601String() : null,
+            'ready_since' => $kingdom && $kingdom->ready_since ? $kingdom->ready_since->toIso8601String() : null,
+            'last_notified_at' => $lastNotified ? $lastNotified->toIso8601String() : null,
+            'replied_at' => $repliedAt ? $repliedAt->toIso8601String() : null,
+            'reminder_count' => $kingdom ? $kingdom->reminder_count : null,
+            'guard_2m' => $lastNotified ? $lastNotified->gte(now()->subMinutes(2)) : false,
+            'mins_since_last_notified' => $lastNotified ? (int) now()->diffInMinutes($lastNotified, true) : null,
+            'now' => now()->toIso8601String(),
+        ];
+    }
+
+    return response()->json([
+        'is_auto' => $isAuto,
+        'has_phone' => !empty($phone),
+        'has_token' => !empty($token),
+        'diagnostics' => $diagnostics,
+    ]);
+});
+
 // Panel Admin — hanya bisa diakses user yang is_admin = true
 Route::middleware('auth')->prefix('admin')->group(function () {
     Route::get('/', [AdminController::class, 'index'])->name('admin.index');
