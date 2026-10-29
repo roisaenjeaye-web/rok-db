@@ -187,8 +187,8 @@
                                     </div>
                                 </div>
                                 <div class="d-flex align-items-center gap-1">
-                                    <button type="button" class="btn btn-xs btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditAcc{{ $acc->id }}" title="Edit Akun">
-                                        <i class="bi bi-pencil"></i>
+                                    <button type="button" class="btn btn-xs btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalEditAcc{{ $acc->id }}" title="Edit Akun & Kelola Karakter">
+                                        <i class="bi bi-pencil-square me-1"></i> Edit & Char
                                     </button>
                                     <form action="/akun/{{ $acc->id }}/hapus" method="POST" class="m-0 d-inline" onsubmit="return confirm('Yakin ingin menghapus akun {{ $acc->email }} beserta SEMUA karakternya? Data tidak bisa dikembalikan!');">
                                         @csrf
@@ -401,6 +401,18 @@
                                                                             </button>
                                                                         </form>
                                                                     @endif
+                                                                    <!-- Tombol Cepat Edit & Hapus Char 1 per 1 -->
+                                                                    <button type="button" class="btn btn-xs btn-outline-warning text-dark py-0 px-1" data-bs-toggle="modal" data-bs-target="#modalEditChar{{ $char->id }}" title="Edit Karakter">
+                                                                        <i class="bi bi-pencil"></i>
+                                                                    </button>
+                                                                    @if($isAdmin)
+                                                                    <form action="/akun/char/{{ $char->id }}/hapus" method="POST" class="m-0 d-inline" onsubmit="return confirm('⚠️ Yakin hapus karakter {{ $char->ign }} dari KD #{{ $char->kd_number }}?');">
+                                                                        @csrf
+                                                                        <button type="submit" class="btn btn-xs btn-outline-danger py-0 px-1" title="Hapus Karakter">
+                                                                            <i class="bi bi-trash"></i>
+                                                                        </button>
+                                                                    </form>
+                                                                    @endif
                                                                     <div class="dropdown d-inline">
                                                                         <button class="btn btn-xs btn-outline-secondary border-0 py-0 px-1" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Menu Aksi Char">
                                                                             <i class="bi bi-three-dots-vertical"></i>
@@ -500,36 +512,94 @@
     </div>
 </div>
 
-<!-- MODALS EDIT AKUN GMAIL -->
+<!-- MODALS EDIT AKUN GMAIL & KARAKTER -->
 @foreach($accounts as $acc)
     <div class="modal fade" id="modalEditAcc{{ $acc->id }}" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
-                <div class="modal-header bg-light py-2">
-                    <h6 class="modal-title fw-bold text-primary"><i class="bi bi-pencil-square me-1"></i> Edit Akun Gmail</h6>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                <div class="modal-header bg-primary text-white py-2">
+                    <h6 class="modal-title fw-bold">
+                        <i class="bi bi-person-gear me-1"></i> Edit Akun & Karakter
+                    </h6>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                 </div>
-                <form action="/akun/{{ $acc->id }}/update" method="POST">
-                    @csrf
-                    <div class="modal-body p-3">
+                <div class="modal-body p-3">
+                    <!-- Form Update Akun -->
+                    <form action="/akun/{{ $acc->id }}/update" method="POST" id="formEditAcc{{ $acc->id }}">
+                        @csrf
                         <div class="mb-2">
-                            <label class="form-label small fw-bold text-muted">EMAIL</label>
+                            <label class="form-label small fw-bold text-muted">EMAIL AKUN GMAIL</label>
                             <input type="email" name="email" value="{{ $acc->email }}" required class="form-control form-control-sm">
                         </div>
-                        <div class="mb-2">
-                            <label class="form-label small fw-bold text-muted">PASSWORD (OPSIONAL)</label>
-                            <input type="text" name="password" value="{{ $acc->password }}" class="form-control form-control-sm">
+                        <div class="row g-2 mb-2">
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted">PASSWORD (OPSIONAL)</label>
+                                <input type="text" name="password" value="{{ $acc->password }}" class="form-control form-control-sm" placeholder="Password">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label small fw-bold text-muted">CATATAN</label>
+                                <input type="text" name="notes" value="{{ $acc->notes }}" class="form-control form-control-sm" placeholder="Catatan">
+                            </div>
                         </div>
-                        <div class="mb-2">
-                            <label class="form-label small fw-bold text-muted">CATATAN</label>
-                            <input type="text" name="notes" value="{{ $acc->notes }}" class="form-control form-control-sm" placeholder="Bind Lilith, dll">
+                        <div class="d-flex justify-content-end mb-3">
+                            <button type="submit" class="btn btn-sm btn-primary fw-bold px-3">
+                                <i class="bi bi-save me-1"></i> Simpan Info Akun
+                            </button>
                         </div>
+                    </form>
+
+                    <!-- Section Daftar Karakter dalam Akun Ini (Bisa Edit & Hapus 1 per 1) -->
+                    <div class="border-top pt-3">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <span class="small fw-bold text-dark">
+                                <i class="bi bi-people-fill text-primary me-1"></i> Karakter di Akun Ini ({{ $acc->characters->count() }})
+                            </span>
+                            <span class="badge bg-light text-muted border" style="font-size: 10px;">Hapus / Edit 1 per 1</span>
+                        </div>
+
+                        @if($acc->characters->count() > 0)
+                            <div class="d-flex flex-column gap-2" style="max-height: 280px; overflow-y: auto;">
+                                @foreach($acc->characters as $c)
+                                    <div class="border rounded p-2 bg-light d-flex justify-content-between align-items-center">
+                                        <div class="me-2 text-truncate">
+                                            <div class="fw-bold text-dark small text-truncate">{{ $c->ign }}</div>
+                                            <div class="text-muted" style="font-size: 11px;">
+                                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 9px;">KD #{{ $c->kd_number }}</span>
+                                                <span class="ms-1">Farm: <b class="text-success">{{ $c->farm_count }}x</b></span>
+                                            </div>
+                                        </div>
+                                        <div class="d-flex align-items-center gap-1 flex-shrink-0">
+                                            <!-- Tombol Edit Char -->
+                                            <button type="button" class="btn btn-xs btn-outline-warning text-dark px-2"
+                                                    data-bs-toggle="modal" data-bs-target="#modalEditChar{{ $c->id }}"
+                                                    title="Edit IGN / Pindah KD">
+                                                <i class="bi bi-pencil-fill me-1"></i> Edit
+                                            </button>
+                                            <!-- Tombol Hapus Char 1 per 1 -->
+                                            @if($isAdmin)
+                                            <form action="/akun/char/{{ $c->id }}/hapus" method="POST" class="m-0 d-inline"
+                                                  onsubmit="sessionStorage.setItem('satset_reopen_modal', '#modalEditAcc{{ $acc->id }}'); return confirm('⚠️ Yakin hapus karakter {{ $c->ign }} dari KD #{{ $c->kd_number }}?');">
+                                                @csrf
+                                                <button type="submit" class="btn btn-xs btn-outline-danger px-2" title="Hapus Karakter Ini">
+                                                    <i class="bi bi-trash-fill me-1"></i> Hapus
+                                                </button>
+                                            </form>
+                                            @endif
+                                        </div>
+                                    </div>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="text-center py-3 text-muted small bg-light rounded border">
+                                <i class="bi bi-inbox d-block mb-1 text-secondary opacity-50 fs-5"></i>
+                                Belum ada karakter yang terhubung ke email ini.
+                            </div>
+                        @endif
                     </div>
-                    <div class="modal-footer bg-light p-2">
-                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary btn-sm fw-bold"><i class="bi bi-save me-1"></i> Simpan</button>
-                    </div>
-                </form>
+                </div>
+                <div class="modal-footer bg-light p-2">
+                    <button type="button" class="btn btn-sm btn-secondary w-100" data-bs-dismiss="modal">Tutup</button>
+                </div>
             </div>
         </div>
     </div>
@@ -539,13 +609,13 @@
 @foreach($characters as $char)
     <!-- Modal Edit Char -->
     <div class="modal fade" id="modalEditChar{{ $char->id }}" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-dialog modal-dialog-centered">
             <div class="modal-content border-0 shadow">
                 <div class="modal-header bg-light py-2">
-                    <h6 class="modal-title fw-bold text-warning"><i class="bi bi-pencil-square me-1"></i> Edit Karakter</h6>
+                    <h6 class="modal-title fw-bold text-dark"><i class="bi bi-pencil-square text-warning me-1"></i> Edit Karakter: {{ $char->ign }}</h6>
                     <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
                 </div>
-                <form action="/akun/char/{{ $char->id }}/update" method="POST">
+                <form action="/akun/char/{{ $char->id }}/update" method="POST" id="formUpdateChar{{ $char->id }}">
                     @csrf
                     <div class="modal-body p-3">
                         <div class="mb-2">
@@ -554,7 +624,10 @@
                         </div>
                         <div class="mb-2">
                             <label class="form-label small fw-bold text-muted">NOMOR KD</label>
-                            <input type="number" name="kd_number" value="{{ $char->kd_number }}" required class="form-control form-control-sm">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text">#</span>
+                                <input type="number" name="kd_number" value="{{ $char->kd_number }}" required class="form-control">
+                            </div>
                         </div>
                         <div class="mb-2">
                             <label class="form-label small fw-bold text-muted">PINDAH KE AKUN GMAIL</label>
@@ -567,11 +640,26 @@
                             </select>
                         </div>
                     </div>
-                    <div class="modal-footer bg-light p-2">
-                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
-                        <button type="submit" class="btn btn-primary btn-sm fw-bold"><i class="bi bi-save me-1"></i> Simpan</button>
-                    </div>
                 </form>
+                <div class="modal-footer bg-light p-2 d-flex justify-content-between">
+                    @if($isAdmin)
+                    <form action="/akun/char/{{ $char->id }}/hapus" method="POST" class="m-0"
+                          onsubmit="sessionStorage.setItem('satset_reopen_modal', '#modalEditAcc{{ $char->game_account_id }}'); return confirm('⚠️ Yakin hapus karakter {{ $char->ign }} permanen?');">
+                        @csrf
+                        <button type="submit" class="btn btn-sm btn-outline-danger" title="Hapus Karakter Ini">
+                            <i class="bi bi-trash-fill me-1"></i> Hapus Karakter
+                        </button>
+                    </form>
+                    @else
+                    <div></div>
+                    @endif
+                    <div class="d-flex gap-1">
+                        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                        <button type="submit" form="formUpdateChar{{ $char->id }}" class="btn btn-primary btn-sm fw-bold">
+                            <i class="bi bi-save me-1"></i> Simpan
+                        </button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -621,5 +709,17 @@
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 <script src="/js/satset-v2.js?v={{ time() }}"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const reopen = sessionStorage.getItem('satset_reopen_modal');
+    if (reopen) {
+        sessionStorage.removeItem('satset_reopen_modal');
+        const modalEl = document.querySelector(reopen);
+        if (modalEl) {
+            new bootstrap.Modal(modalEl).show();
+        }
+    }
+});
+</script>
 </body>
 </html>
