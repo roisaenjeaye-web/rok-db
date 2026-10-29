@@ -80,7 +80,7 @@
     </div>
 
     @php
-        $activeWorker = auth()->user()->name ?? 'Rois';
+        $activeWorker = $activeWorker ?? (auth()->check() && !auth()->user()->isAdmin() ? auth()->user()->name : ($knownWorkers[0] ?? 'Operator'));
     @endphp
 
 

@@ -173,8 +173,9 @@
                         </div>
                     </div>
                 @empty
-                    <div class="text-center py-3 text-muted small">
-                        Belum ada data joki yang tercatat.
+                    <div class="text-center py-4 text-muted small">
+                        <i class="bi bi-people display-6 d-block mb-1 text-secondary opacity-50"></i>
+                        Belum ada operator joki yang terdaftar. (Akun Admin tidak dimasukkan sebagai joki)
                     </div>
                 @endforelse
             </div>
@@ -245,9 +246,14 @@
                                                         <div class="mb-3">
                                                             <label class="form-label text-muted small fw-bold">PILIH OPERATOR JOKI</label>
                                                             <select class="form-select" name="worker_name" required>
-                                                                @foreach($allWorkers as $w)
+                                                                @forelse($allWorkers as $w)
                                                                     <option value="{{ $w }}" {{ $sal->worker_name == $w ? 'selected' : '' }}>{{ $w }}</option>
-                                                                @endforeach
+                                                                @empty
+                                                                    <option value="{{ $sal->worker_name }}" selected>{{ $sal->worker_name }}</option>
+                                                                @endforelse
+                                                                @if(!in_array($sal->worker_name, $allWorkers) && !empty($sal->worker_name))
+                                                                    <option value="{{ $sal->worker_name }}" selected>{{ $sal->worker_name }}</option>
+                                                                @endif
                                                             </select>
                                                         </div>
                                                         <div class="mb-3">
@@ -418,9 +424,11 @@
                     <div class="mb-3">
                         <label class="form-label text-muted small fw-bold">PILIH OPERATOR JOKI</label>
                         <select class="form-select" name="worker_name" required>
-                            @foreach($allWorkers as $w)
+                            @forelse($allWorkers as $w)
                                 <option value="{{ $w }}">{{ $w }}</option>
-                            @endforeach
+                            @empty
+                                <option value="" disabled selected>Belum ada akun operator joki terdaftar</option>
+                            @endforelse
                         </select>
                     </div>
                     <div class="mb-3">

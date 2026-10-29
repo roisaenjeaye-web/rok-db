@@ -27,7 +27,7 @@ class AdminController extends Controller
 
         $users      = User::orderBy('is_admin', 'desc')->orderBy('name')->get();
         $characters = Character::with('gameAccount')->orderBy('kd_number')->get();
-        $workers    = User::pluck('name')->toArray();
+        $workers    = User::where('is_admin', false)->pluck('name')->unique()->values()->toArray();
 
         return view('admin', compact('users', 'characters', 'workers'));
     }

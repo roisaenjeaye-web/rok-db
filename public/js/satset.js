@@ -1183,7 +1183,13 @@
         }
 
         // F. Auto-Notify Heartbeat (Otomatis kirim saat tab terbuka & KD selesai jeda tanpa klik apapun)
+        // - Interval 60 detik (server guard 2 menit cegah duplikat dari multiple tab)
+        // - Pause otomatis saat tab tersembunyi (hemat kuota Fonnte)
+        // - Langsung cek ulang saat tab aktif kembali setelah >= 8 menit tidak aktif
         async function runAutoNotifyHeartbeat() {
+            // Jangan kirim saat tab sedang tersembunyi/minimize
+            if (document.visibilityState === 'hidden') return;
+
             try {
                 const res = await fetch('/bot/check-auto-notify', {
                     method: 'POST',
@@ -1246,9 +1252,25 @@
             }
         });
 
-        // Jalankan pengecekan heartbeat pertama kali setelah 5 detik, lalu tiap 25 detik
+        // Jalankan pengecekan heartbeat:
+        // - Pertama: 5 detik setelah halaman terbuka
+        // - Selanjutnya: tiap 60 detik (server guard 2 menit cegah duplikat)
         setTimeout(runAutoNotifyHeartbeat, 5000);
-        setInterval(runAutoNotifyHeartbeat, 25000);
+        setInterval(runAutoNotifyHeartbeat, 60000);
+
+        // Cek ulang segera saat tab aktif kembali setelah >= 8 menit tersembunyi
+        let tabHiddenAt = null;
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden') {
+                tabHiddenAt = Date.now();
+            } else if (document.visibilityState === 'visible') {
+                const hiddenMs = tabHiddenAt ? (Date.now() - tabHiddenAt) : 0;
+                if (hiddenMs >= 8 * 60 * 1000) {
+                    runAutoNotifyHeartbeat();
+                }
+                tabHiddenAt = null;
+            }
+        });
 
         // Ekspor fungsi trigger heartbeat langsung saat timer 00:00
         window.SatsetTriggerHeartbeat = runAutoNotifyHeartbeat;

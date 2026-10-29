@@ -37,12 +37,27 @@ class KingdomController extends Controller
 
         $kingdoms = Kingdom::orderBy('kd_number', 'asc')->get();
 
-        // 2. Daftar operator joki (hanya dari User terdaftar di database)
-        $dbUsers = User::pluck('name')->toArray();
-        $allWorkers = !empty($dbUsers) ? $dbUsers : ['Rois'];
+        // 2. Daftar operator joki (hanya dari User terdaftar di database yang bukan Admin)
+        $adminNames = User::where('is_admin', true)->pluck('name')->toArray();
+        if (empty($adminNames)) {
+            $adminNames = ['Rois'];
+        }
 
-        $allStats = KdFarmerStat::all();
-        $allSalaries = Salary::all();
+        $operatorUsers = User::where('is_admin', false)->pluck('name')->unique()->values()->toArray();
+
+        $allStats = KdFarmerStat::whereNotIn('worker_name', $adminNames)->get();
+        $allSalaries = Salary::whereNotIn('worker_name', $adminNames)->get();
+
+        $workerNamesFromStats = $allStats->pluck('worker_name')->unique()->toArray();
+        $workerNamesFromSalary = $allSalaries->pluck('worker_name')->unique()->toArray();
+
+        $allWorkers = collect($operatorUsers)
+            ->merge($workerNamesFromStats)
+            ->merge($workerNamesFromSalary)
+            ->reject(fn($name) => in_array($name, $adminNames) || empty($name))
+            ->unique()
+            ->values()
+            ->toArray();
 
         $resumeJoki = [];
         $totalOverallFarm = 0;
@@ -75,8 +90,11 @@ class KingdomController extends Controller
             return $b['total_farm'] <=> $a['total_farm'];
         });
 
-        // Riwayat transaksi gaji manual
-        $salaries = Salary::orderBy('date', 'desc')->orderBy('created_at', 'desc')->get();
+        // Riwayat transaksi gaji manual (khusus operator joki, admin tidak dimasukkan)
+        $salaries = Salary::whereNotIn('worker_name', $adminNames)
+            ->orderBy('date', 'desc')
+            ->orderBy('created_at', 'desc')
+            ->get();
 
         return view('kingdom', compact(
             'kingdoms',
@@ -102,6 +120,11 @@ class KingdomController extends Controller
             'date' => 'nullable|date',
         ]);
 
+        $adminNames = User::where('is_admin', true)->pluck('name')->toArray();
+        if (in_array($request->worker_name, $adminNames)) {
+            return back()->with('error', '❌ Gaji hanya dapat dicatat untuk Operator Joki, bukan Admin!');
+        }
+
         Salary::create([
             'worker_name' => $request->worker_name,
             'amount' => $request->amount,
@@ -126,6 +149,11 @@ class KingdomController extends Controller
             'notes' => 'nullable|string',
             'date' => 'nullable|date',
         ]);
+
+        $adminNames = User::where('is_admin', true)->pluck('name')->toArray();
+        if (in_array($request->worker_name, $adminNames)) {
+            return back()->with('error', '❌ Gaji hanya dapat dicatat untuk Operator Joki, bukan Admin!');
+        }
 
         $salary->update([
             'worker_name' => $request->worker_name,

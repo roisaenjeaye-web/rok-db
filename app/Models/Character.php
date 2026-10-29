@@ -26,9 +26,38 @@ class Character extends Model
         return $this->belongsTo(GameAccount::class);
     }
 
-    // Helper untuk menambah log farm atas nama seorang worker/joki
+    // Accessor: Pastikan nama user Admin tidak pernah muncul di farmer_stats
+    public function getFarmerStatsAttribute($value)
+    {
+        $stats = is_string($value) ? json_decode($value, true) : $value;
+        if (!is_array($stats) || empty($stats)) {
+            return [];
+        }
+
+        static $adminNames = null;
+        if ($adminNames === null) {
+            $adminNames = User::where('is_admin', true)->pluck('name')->toArray();
+            if (empty($adminNames)) {
+                $adminNames = ['Rois'];
+            }
+        }
+
+        foreach ($adminNames as $adm) {
+            unset($stats[$adm]);
+        }
+
+        return $stats;
+    }
+
+    // Helper untuk menambah log farm atas nama seorang worker/joki (Admin tidak dicatat)
     public function recordFarm(string $worker): void
     {
+        // Admin tidak ikutan dicatat macul
+        $isAdmin = User::where('name', $worker)->where('is_admin', true)->exists();
+        if ($isAdmin) {
+            return;
+        }
+
         $stats = $this->farmer_stats ?? [];
         $stats[$worker] = ($stats[$worker] ?? 0) + 1;
 
@@ -42,6 +71,17 @@ class Character extends Model
     // Helper untuk mengurangi atau reset log farm per worker
     public function adjustFarmLog(string $worker, string $action, int $customCount = 0): void
     {
+        // Admin tidak memiliki log macul
+        $isAdmin = User::where('name', $worker)->where('is_admin', true)->exists();
+        if ($isAdmin) {
+            $stats = $this->farmer_stats ?? [];
+            unset($stats[$worker]);
+            $this->farmer_stats = $stats;
+            $this->farm_count = array_sum($stats);
+            $this->save();
+            return;
+        }
+
         $stats = $this->farmer_stats ?? [];
 
         if ($action === 'decrement') {

@@ -316,7 +316,7 @@
                                             data-cooldown="{{ $cooldownText }}" 
                                             data-cooldown-hours="{{ $kdCooldownHours }}" 
                                             data-target-time="{{ $maxCooldownEnd ? $maxCooldownEnd->timestamp : 0 }}"
-                                            data-worker="{{ $activeWorker ?? 'Rois' }}"
+                                            data-worker="{{ $activeWorker ?? '' }}"
                                             title="Buka Chat WhatsApp (Direct WA)">
                                             <i class="bi bi-whatsapp"></i> <span style="font-size: 11px;">WA</span>
                                         </button>
@@ -591,7 +591,7 @@
                             <label class="form-label small fw-bold text-muted">OPERATOR JOKI</label>
                             <select name="worker_name" class="form-select form-select-sm">
                                 @foreach($knownWorkers as $w)
-                                    <option value="{{ $w }}" {{ ($activeWorker ?? 'Rois') === $w ? 'selected' : '' }}>{{ $w }}</option>
+                                    <option value="{{ $w }}" {{ ($activeWorker ?? '') === $w ? 'selected' : '' }}>{{ $w }}</option>
                                 @endforeach
                             </select>
                         </div>

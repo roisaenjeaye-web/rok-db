@@ -305,8 +305,13 @@ class BotNotificationController extends Controller
 
     /**
      * Core Engine: Mengevaluasi status semua KD dan mengirim notifikasi / spam
-     * - Belum dibalas: spam tiap 10 menit
-     * - Sudah dibalas tapi lewat 30 menit belum dikelarin/diceklis: spam tiap 5 menit
+     *
+     * Alur yang benar:
+     *  1. KD siap panen dan last_notified_at null -> kirim notif awal SEGERA
+     *  2. Belum dibalas dan >= 10 menit sejak notif terakhir -> spam 10 menit
+     *  3. Sudah dibalas dan >= 30 menit belum diceklis dan >= 5 menit sejak notif terakhir -> spam 5 menit
+     *  4. Guard 2 menit: cegah double-fire dari concurrent heartbeat browser
+     *  5. Deteksi siklus baru: jika char baru saja di-farm, reset state notifikasi
      */
     public static function evaluateAndNotifyKingdoms(?string $worker = null): array
     {
@@ -345,48 +350,70 @@ class BotNotificationController extends Controller
                 }
             }
 
-            // KASUS 0: SEMUA CHAR SEDANG COOLDOWN (Sudah beres dipanen)
+            // KASUS 0: Semua char masih cooldown -- bersihkan state KD
             if ($readyCount === 0) {
                 if ($kingdom && ($kingdom->replied_at || $kingdom->ready_since || ($kingdom->reminder_count ?? 0) > 0)) {
-                    $kingdom->replied_at = null;
-                    $kingdom->replied_by = null;
-                    $kingdom->ready_since = null;
-                    $kingdom->reminder_count = 0;
+                    $kingdom->replied_at       = null;
+                    $kingdom->replied_by       = null;
+                    $kingdom->ready_since      = null;
+                    $kingdom->reminder_count   = 0;
+                    $kingdom->last_notified_at = null;
                     $kingdom->save();
                 }
                 continue;
             }
 
-            // KASUS KD MEMILIKI CHAR SIAP PANEN
+            // Pastikan record Kingdom ada
             if (!$kingdom) {
                 $kingdom = Kingdom::firstOrCreate(['kd_number' => $kd]);
             }
 
-            if (!$kingdom->ready_since) {
-                $kingdom->ready_since = now();
+            // Deteksi siklus farm baru:
+            // Jika latestFarmedAt >= ready_since, char baru saja selesai cooldown setelah di-farm
+            // -> ini siklus notifikasi baru, reset semua state notifikasi
+            $isNewCycle = $latestFarmedAt && (
+                $kingdom->ready_since === null
+                || $kingdom->ready_since->lte($latestFarmedAt)
+            );
+
+            if ($isNewCycle) {
+                $kingdom->ready_since      = now();
+                $kingdom->reminder_count   = 0;
+                $kingdom->last_notified_at = null;
+                $kingdom->replied_at       = null;
+                $kingdom->replied_by       = null;
+                $kingdom->save();
+            } elseif ($kingdom->ready_since === null) {
+                // Char belum pernah di-farm sebelumnya
+                $kingdom->ready_since    = now();
                 $kingdom->reminder_count = 0;
                 $kingdom->save();
             }
 
             $lastNotified = $kingdom->last_notified_at;
-            $repliedAt = $kingdom->replied_at;
+            $repliedAt    = $kingdom->replied_at;
 
-            // KASUS 1: BELUM ADA YANG BALAS WA (replied_at == null)
-            // Logika: Notifikasi pertama kali saat siap, lalu spam setiap 10 menit jika belum dibalas
+            // Guard: cegah double-fire dalam 2 menit (dari concurrent heartbeat browser multiple tab)
+            if ($lastNotified && $lastNotified->gte(now()->subMinutes(2))) {
+                continue;
+            }
+
+            // KASUS 1: Belum dibalas (replied_at == null)
+            // last_notified null -> notif awal SEGERA
+            // last_notified ada dan >= 10 menit -> spam 10 menit
             if ($repliedAt === null) {
                 $shouldSend = false;
-                $isSpam = false;
+                $isSpam     = false;
 
-                if (!$lastNotified || ($latestFarmedAt && $lastNotified->lessThan($latestFarmedAt))) {
-                    // Notifikasi awal siap panen
+                if ($lastNotified === null) {
+                    // Notifikasi pertama -- kirim segera
                     $shouldSend = true;
-                    $isSpam = false;
+                    $isSpam     = false;
                 } else {
-                    // Cek apakah sudah lewat 10 menit sejak notif/spam terakhir
-                    $diffMinutes = abs((int) round(now()->diffInMinutes($lastNotified)));
-                    if ($diffMinutes >= 10) {
+                    $minsElapsed = (int) now()->diffInMinutes($lastNotified, true);
+                    if ($minsElapsed >= 10) {
                         $shouldSend = true;
-                        $isSpam = true; // Spam 10 menit
+                        $isSpam     = true;
                     }
                 }
 
@@ -396,45 +423,48 @@ class BotNotificationController extends Controller
 
                     if ($res['success']) {
                         $kingdom->last_notified_at = now();
-                        $kingdom->reminder_count = ($kingdom->reminder_count ?? 0) + 1;
+                        $kingdom->reminder_count   = ($kingdom->reminder_count ?? 0) + 1;
                         $kingdom->save();
 
                         $notifiedKds[] = [
-                            'kd' => $kd,
-                            'ready_count' => $readyCount,
-                            'type' => $isSpam ? 'spam_10m_unreplied' : 'initial_ready',
+                            'kd'             => $kd,
+                            'ready_count'    => $readyCount,
+                            'type'           => $isSpam ? 'spam_10m_unreplied' : 'initial_ready',
                             'reminder_count' => $kingdom->reminder_count,
                         ];
                     }
                 }
             }
-            // KASUS 2: SUDAH ADA YANG BALAS WA (replied_at != null)
-            // Logika: Diberi jeda 30 menit. Jika > 30 menit belum dikelarin/diceklis di web, bot spam setiap 5 menit!
+            // KASUS 2: Sudah dibalas (replied_at != null)
+            // Diberi jeda 30 menit. Lewat 30 menit dan >= 5 menit sejak notif terakhir -> spam 5 menit
             else {
-                $minsSinceReply = abs((int) round(now()->diffInMinutes($repliedAt)));
+                $minsSinceReply = (int) now()->diffInMinutes($repliedAt, true);
 
                 if ($minsSinceReply >= 30) {
-                    $diffSinceLastNotif = $lastNotified ? abs((int) round(now()->diffInMinutes($lastNotified))) : 999;
+                    $diffSinceLastNotif = $lastNotified
+                        ? (int) now()->diffInMinutes($lastNotified, true)
+                        : 999;
 
-                    // Spam setiap 5 menit jika belum dikelarin
+                    // Spam tiap 5 menit selama belum dikelarin
                     if ($diffSinceLastNotif >= 5) {
                         $msg = self::buildOverdueSpam5Text($kd, $readyCount, $kChars->count(), $cooldownHours, $kingdom, $minsSinceReply);
                         $res = FonnteService::sendMessage($phone, $msg, $token);
 
                         if ($res['success']) {
                             $kingdom->last_notified_at = now();
-                            $kingdom->reminder_count = ($kingdom->reminder_count ?? 0) + 1;
+                            $kingdom->reminder_count   = ($kingdom->reminder_count ?? 0) + 1;
                             $kingdom->save();
 
                             $notifiedKds[] = [
-                                'kd' => $kd,
-                                'ready_count' => $readyCount,
-                                'type' => 'spam_5m_overdue',
+                                'kd'             => $kd,
+                                'ready_count'    => $readyCount,
+                                'type'           => 'spam_5m_overdue',
                                 'reminder_count' => $kingdom->reminder_count,
                             ];
                         }
                     }
                 }
+                // Sudah dibalas tapi belum 30 menit: diam, tidak spam
             }
         }
 

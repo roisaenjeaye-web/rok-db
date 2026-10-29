@@ -13,29 +13,52 @@ use Illuminate\Support\Facades\DB;
 
 class GameAccountController extends Controller
 {
-    // Helper untuk ambil username joki yang sedang aktif (otomatis dari akun user yang login)
+    // Helper untuk ambil username joki yang sedang aktif (hanya user operator biasa, bukan admin)
     public function getActiveWorker(?Request $request = null): string
     {
-        if (auth()->check()) {
+        // 1. Jika ada worker di session yang dipilih (dan bukan admin)
+        if (session()->has('active_worker')) {
+            $sw = session('active_worker');
+            $isAdmin = \App\Models\User::where('name', $sw)->where('is_admin', true)->exists();
+            if (!$isAdmin && !empty($sw)) {
+                return $sw;
+            }
+        }
+
+        // 2. Jika user yang login adalah operator biasa (bukan admin)
+        if (auth()->check() && !auth()->user()->isAdmin()) {
             return auth()->user()->name;
         }
 
-        return \App\Models\User::value('name') ?: 'Rois';
+        // 3. Jika yang login adalah admin, pilih operator pertama (bukan admin)
+        $firstOperator = \App\Models\User::where('is_admin', false)->value('name');
+        return $firstOperator ?: 'Therta';
     }
 
-    // Helper untuk mengambil daftar semua nama operator joki yang terdaftar di database User
+    // Helper untuk mengambil daftar semua nama operator joki yang terdaftar di database User (tidak termasuk admin)
     public function getKnownWorkers(): array
     {
-        $dbUsers = \App\Models\User::pluck('name')->toArray();
-        return !empty($dbUsers) ? $dbUsers : ['Rois'];
+        $dbUsers = \App\Models\User::where('is_admin', false)->pluck('name')->unique()->values()->toArray();
+        return !empty($dbUsers) ? $dbUsers : ['Therta'];
     }
 
-    // Mengganti atau menambah username joki yang aktif
+    // Mengganti atau menambah username joki yang aktif (Admin dilarang)
     public function setActiveWorker(Request $request)
     {
-        $worker = trim($request->input('worker_name', 'Rois'));
+        $firstOp = \App\Models\User::where('is_admin', false)->value('name') ?: 'Therta';
+        $worker = trim($request->input('worker_name', $firstOp));
         if (empty($worker)) {
-            $worker = 'Rois';
+            $worker = $firstOp;
+        }
+
+        // Admin tidak boleh dijadikan worker macul
+        $isAdmin = \App\Models\User::where('name', $worker)->where('is_admin', true)->exists();
+        if ($isAdmin) {
+            $msg = "❌ {$worker} adalah Admin dan tidak ikutan macul!";
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 422);
+            }
+            return back()->with('error', $msg);
         }
 
         // Simpan ke session
@@ -73,7 +96,8 @@ class GameAccountController extends Controller
             return $acc->characters->isEmpty();
         });
 
-        $kdStats = KdFarmerStat::all()->groupBy('kd_number');
+        $adminNames = \App\Models\User::where('is_admin', true)->pluck('name')->toArray();
+        $kdStats = KdFarmerStat::whereNotIn('worker_name', $adminNames)->get()->groupBy('kd_number');
         $knownWorkers = $this->getKnownWorkers();
         $activeWorker = $this->getActiveWorker(request());
         $kingdoms = Kingdom::all()->keyBy('kd_number');
@@ -339,7 +363,8 @@ class GameAccountController extends Controller
 
         $characters = Character::with('gameAccount')->get();
         $groupedByKD = $characters->groupBy('kd_number')->sortKeys();
-        $kdStats = KdFarmerStat::all()->groupBy('kd_number');
+        $adminNames = \App\Models\User::where('is_admin', true)->pluck('name')->toArray();
+        $kdStats = KdFarmerStat::whereNotIn('worker_name', $adminNames)->get()->groupBy('kd_number');
         $knownWorkers = $this->getKnownWorkers();
         $activeWorker = $this->getActiveWorker(request());
         $kingdoms = Kingdom::all()->keyBy('kd_number');

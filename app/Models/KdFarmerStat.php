@@ -24,9 +24,15 @@ class KdFarmerStat extends Model
         'kd_number' => 'integer',
     ];
 
-    // Helper untuk menambah log farm untuk worker dan KD tertentu
-    public static function incrementCount(int $kdNumber, string $workerName, int $by = 1): self
+    // Helper untuk menambah log farm untuk worker dan KD tertentu (Admin diabaikan)
+    public static function incrementCount(int $kdNumber, string $workerName, int $by = 1): ?self
     {
+        // Admin tidak dihitung macul
+        $isAdmin = User::where('name', $workerName)->where('is_admin', true)->exists();
+        if ($isAdmin) {
+            return null;
+        }
+
         $stat = self::firstOrCreate(
             ['kd_number' => $kdNumber, 'worker_name' => $workerName],
             ['farm_count' => 0]
@@ -40,8 +46,13 @@ class KdFarmerStat extends Model
     }
 
     // Helper untuk mengurangi log farm (tidak boleh minus dari 0)
-    public static function decrementCount(int $kdNumber, string $workerName, int $by = 1): self
+    public static function decrementCount(int $kdNumber, string $workerName, int $by = 1): ?self
     {
+        $isAdmin = User::where('name', $workerName)->where('is_admin', true)->exists();
+        if ($isAdmin) {
+            return null;
+        }
+
         $stat = self::firstOrCreate(
             ['kd_number' => $kdNumber, 'worker_name' => $workerName],
             ['farm_count' => 0]
@@ -54,8 +65,13 @@ class KdFarmerStat extends Model
     }
 
     // Helper untuk mereset log farm ke 0 atau angka tertentu
-    public static function setCount(int $kdNumber, string $workerName, int $count = 0): self
+    public static function setCount(int $kdNumber, string $workerName, int $count = 0): ?self
     {
+        $isAdmin = User::where('name', $workerName)->where('is_admin', true)->exists();
+        if ($isAdmin) {
+            return null;
+        }
+
         $stat = self::firstOrCreate(
             ['kd_number' => $kdNumber, 'worker_name' => $workerName],
             ['farm_count' => 0]
