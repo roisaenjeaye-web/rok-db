@@ -107,7 +107,7 @@
 
     <div class="row">
         <!-- Kolom Form (Tambah Akun & Suntik Char) -->
-        <div class="col-lg-4">
+        <div class="col-lg-4 order-2 order-lg-1">
             <div class="card mb-4 shadow-sm">
                 <div class="card-header text-primary"><i class="bi bi-google me-1"></i> 1. Tambah Akun Gmail</div>
                 <div class="card-body p-4">
@@ -207,7 +207,7 @@
         </div>
 
         <!-- Kolom Data Akun & Char Dikategorikan per KD (Format Card Ringkas seperti Jadwal) -->
-        <div class="col-lg-8">
+        <div class="col-lg-8 order-1 order-lg-2 mb-4 mb-lg-0">
             <div class="d-flex justify-content-between align-items-center mb-3">
                 <h5 class="fw-bold text-dark m-0"><i class="bi bi-grid-fill text-primary me-2"></i>Daftar Akun per Kingdom</h5>
                 <span class="badge bg-secondary-subtle text-secondary border">Total: {{ $groupedByKD->count() }} Kingdom</span>

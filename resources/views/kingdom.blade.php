@@ -113,24 +113,24 @@
         </div>
 
         <div class="card-body p-3">
-            <!-- 3 Ringkasan Utama -->
+            <!-- 3 Ringkasan Utama (HP & Desktop Friendly) -->
             <div class="row g-2 mb-3">
-                <div class="col-md-4">
-                    <div class="bg-light p-2 rounded border text-center">
-                        <span class="text-muted small fw-bold">TOTAL OPERATOR JOKI</span>
-                        <div class="fs-5 fw-bold text-dark mt-1">{{ count($resumeJoki) }} Orang</div>
+                <div class="col-4">
+                    <div class="bg-light p-2 rounded border text-center h-100 d-flex flex-column justify-content-center">
+                        <span class="text-muted fw-bold" style="font-size: 10px;">OPERATOR JOKI</span>
+                        <div class="fs-6 fs-md-5 fw-bold text-dark mt-1">{{ count($resumeJoki) }} <span class="d-none d-sm-inline fw-normal text-muted small">Orang</span></div>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="bg-light p-2 rounded border text-center">
-                        <span class="text-muted small fw-bold">TOTAL PANEN / MACUL</span>
-                        <div class="fs-5 fw-bold text-primary mt-1">{{ $totalOverallFarm }}x Selesai</div>
+                <div class="col-4">
+                    <div class="bg-light p-2 rounded border text-center h-100 d-flex flex-column justify-content-center">
+                        <span class="text-muted fw-bold" style="font-size: 10px;">TOTAL PANEN</span>
+                        <div class="fs-6 fs-md-5 fw-bold text-primary mt-1">{{ $totalOverallFarm }}x <span class="d-none d-sm-inline fw-normal text-muted small">Macul</span></div>
                     </div>
                 </div>
-                <div class="col-md-4">
-                    <div class="bg-light p-2 rounded border text-center">
-                        <span class="text-muted small fw-bold">TOTAL GAJI TERCATAT</span>
-                        <div class="fs-5 fw-bold text-success mt-1">Rp {{ number_format($totalOverallSalary, 0, ',', '.') }}</div>
+                <div class="col-4">
+                    <div class="bg-light p-2 rounded border text-center h-100 d-flex flex-column justify-content-center">
+                        <span class="text-muted fw-bold" style="font-size: 10px;">TOTAL GAJI</span>
+                        <div class="fs-6 fs-md-5 fw-bold text-success mt-1">Rp {{ number_format($totalOverallSalary, 0, ',', '.') }}</div>
                     </div>
                 </div>
             </div>
@@ -190,7 +190,8 @@
                 </div>
 
                 @if($salaries->count() > 0)
-                    <div class="table-responsive">
+                    <!-- Desktop Table View -->
+                    <div class="table-responsive d-none d-md-block">
                         <table class="table table-sm table-hover align-middle mb-0" style="font-size: 12px;">
                             <thead class="table-light">
                                 <tr>
@@ -211,12 +212,9 @@
                                         <td class="text-center">
                                             <div class="d-flex gap-1 justify-content-center">
                                                 @if($isAdmin)
-                                                <!-- Tombol Edit Modal -->
                                                 <button type="button" class="btn btn-xs btn-outline-warning text-dark px-2" data-bs-toggle="modal" data-bs-target="#modalEditGaji{{ $sal->id }}" title="Edit Gaji">
                                                     <i class="bi bi-pencil-fill"></i>
                                                 </button>
-
-                                                <!-- Tombol Hapus -->
                                                 <form action="/gaji/{{ $sal->id }}/hapus" method="POST" class="m-0 d-inline" onsubmit="return confirm('Hapus catatan gaji ini?');">
                                                     @csrf
                                                     <button type="submit" class="btn btn-xs btn-outline-danger px-2" title="Hapus Gaji">
@@ -231,59 +229,90 @@
                                             </div>
                                         </td>
                                     </tr>
-
-                                    <!-- Modal Edit Gaji untuk baris ini -->
-                                    <div class="modal fade" id="modalEditGaji{{ $sal->id }}" tabindex="-1" aria-hidden="true">
-                                        <div class="modal-dialog modal-dialog-centered">
-                                            <div class="modal-content">
-                                                <form action="/gaji/{{ $sal->id }}/update" method="POST">
-                                                    @csrf
-                                                    <div class="modal-header">
-                                                        <h6 class="modal-title fw-bold"><i class="bi bi-pencil-square text-warning me-1"></i> Edit Catatan Gaji</h6>
-                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                    </div>
-                                                    <div class="modal-body p-3">
-                                                        <div class="mb-3">
-                                                            <label class="form-label text-muted small fw-bold">PILIH OPERATOR JOKI</label>
-                                                            <select class="form-select" name="worker_name" required>
-                                                                @forelse($allWorkers as $w)
-                                                                    <option value="{{ $w }}" {{ $sal->worker_name == $w ? 'selected' : '' }}>{{ $w }}</option>
-                                                                @empty
-                                                                    <option value="{{ $sal->worker_name }}" selected>{{ $sal->worker_name }}</option>
-                                                                @endforelse
-                                                                @if(!in_array($sal->worker_name, $allWorkers) && !empty($sal->worker_name))
-                                                                    <option value="{{ $sal->worker_name }}" selected>{{ $sal->worker_name }}</option>
-                                                                @endif
-                                                            </select>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label class="form-label text-muted small fw-bold">NOMINAL GAJI (RP)</label>
-                                                            <div class="input-group">
-                                                                <span class="input-group-text bg-light">Rp</span>
-                                                                <input type="number" class="form-control" name="amount" value="{{ (int)$sal->amount }}" required min="0">
-                                                            </div>
-                                                        </div>
-                                                        <div class="mb-3">
-                                                            <label class="form-label text-muted small fw-bold">KETERANGAN / CATATAN (OPSIONAL)</label>
-                                                            <input type="text" class="form-control" name="notes" value="{{ $sal->notes }}" placeholder="Misal: Gaji Pokok, Bonus, dll">
-                                                        </div>
-                                                        <div class="mb-2">
-                                                            <label class="form-label text-muted small fw-bold">TANGGAL</label>
-                                                            <input type="date" class="form-control" name="date" value="{{ $sal->date ? $sal->date->format('Y-m-d') : $sal->created_at->format('Y-m-d') }}">
-                                                        </div>
-                                                    </div>
-                                                    <div class="modal-footer p-2">
-                                                        <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Batal</button>
-                                                        <button type="submit" class="btn btn-sm btn-warning fw-bold text-dark"><i class="bi bi-save me-1"></i> Simpan Perubahan</button>
-                                                    </div>
-                                                </form>
-                                            </div>
-                                        </div>
-                                    </div>
                                 @endforeach
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Mobile Card View (HP-Friendly) -->
+                    <div class="d-md-none">
+                        @foreach($salaries as $sal)
+                            <div class="border rounded-3 p-2 mb-2 bg-light">
+                                <div class="d-flex justify-content-between align-items-center mb-1">
+                                    <span class="fw-bold text-primary" style="font-size: 13px;">{{ $sal->worker_name }}</span>
+                                    <span class="fw-bold text-success" style="font-size: 13px;">Rp {{ number_format($sal->amount, 0, ',', '.') }}</span>
+                                </div>
+                                <div class="d-flex justify-content-between align-items-center text-muted" style="font-size: 11px;">
+                                    <span><i class="bi bi-calendar3 me-1"></i>{{ $sal->date ? $sal->date->format('d M Y') : $sal->created_at->format('d M Y') }}</span>
+                                    <span>{{ $sal->notes ?: '-' }}</span>
+                                </div>
+                                @if($isAdmin)
+                                <div class="d-flex gap-1 justify-content-end pt-2 border-top mt-2">
+                                    <button type="button" class="btn btn-xs btn-outline-warning text-dark px-2" data-bs-toggle="modal" data-bs-target="#modalEditGaji{{ $sal->id }}" title="Edit Gaji">
+                                        <i class="bi bi-pencil-fill me-1"></i> Edit
+                                    </button>
+                                    <form action="/gaji/{{ $sal->id }}/hapus" method="POST" class="m-0 d-inline" onsubmit="return confirm('Hapus catatan gaji ini?');">
+                                        @csrf
+                                        <button type="submit" class="btn btn-xs btn-outline-danger px-2" title="Hapus Gaji">
+                                            <i class="bi bi-trash-fill me-1"></i> Hapus
+                                        </button>
+                                    </form>
+                                </div>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+
+                    <!-- Modal Edit Gaji (Satu untuk Setiap Baris) -->
+                    @foreach($salaries as $sal)
+                        <div class="modal fade" id="modalEditGaji{{ $sal->id }}" tabindex="-1" aria-hidden="true">
+                            <div class="modal-dialog modal-dialog-centered">
+                                <div class="modal-content">
+                                    <form action="/gaji/{{ $sal->id }}/update" method="POST">
+                                        @csrf
+                                        <div class="modal-header">
+                                            <h6 class="modal-title fw-bold"><i class="bi bi-pencil-square text-warning me-1"></i> Edit Catatan Gaji</h6>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                        </div>
+                                        <div class="modal-body p-3">
+                                            <div class="mb-3">
+                                                <label class="form-label text-muted small fw-bold">PILIH OPERATOR JOKI</label>
+                                                <select class="form-select" name="worker_name" required>
+                                                    @forelse($allWorkers as $w)
+                                                        <option value="{{ $w }}" {{ $sal->worker_name == $w ? 'selected' : '' }}>{{ $w }}</option>
+                                                    @empty
+                                                        <option value="{{ $sal->worker_name }}" selected>{{ $sal->worker_name }}</option>
+                                                    @endforelse
+                                                    @if(!in_array($sal->worker_name, $allWorkers) && !empty($sal->worker_name))
+                                                        <option value="{{ $sal->worker_name }}" selected>{{ $sal->worker_name }}</option>
+                                                    @endif
+                                                </select>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label text-muted small fw-bold">NOMINAL GAJI (RP)</label>
+                                                <div class="input-group">
+                                                    <span class="input-group-text bg-light">Rp</span>
+                                                    <input type="number" class="form-control" name="amount" value="{{ (int)$sal->amount }}" required min="0">
+                                                </div>
+                                            </div>
+                                            <div class="mb-3">
+                                                <label class="form-label text-muted small fw-bold">KETERANGAN / CATATAN (OPSIONAL)</label>
+                                                <input type="text" class="form-control" name="notes" value="{{ $sal->notes }}" placeholder="Misal: Gaji Pokok, Bonus, dll">
+                                            </div>
+                                            <div class="mb-2">
+                                                <label class="form-label text-muted small fw-bold">TANGGAL</label>
+                                                <input type="date" class="form-control" name="date" value="{{ $sal->date ? $sal->date->format('Y-m-d') : $sal->created_at->format('Y-m-d') }}">
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer p-2">
+                                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Batal</button>
+                                            <button type="submit" class="btn btn-sm btn-warning fw-bold text-dark"><i class="bi bi-save me-1"></i> Simpan Perubahan</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    @endforeach
                 @else
                     <div class="text-center py-3 text-muted small">
                         Belum ada catatan input gaji. Klik tombol <b>"Input Gaji Manual"</b> di atas untuk menambahkan.
@@ -295,68 +324,18 @@
 
     <!-- Row: Database Stok Farm (Auto Sinkron dari Akun & Char) -->
     <div class="row">
-        <!-- Kolom Kiri: Form Tambah / Update KD Manual (Opsional) -->
-        <div class="col-xl-4 col-lg-5">
-            <div class="card shadow-sm">
-                <div class="card-header text-primary d-flex justify-content-between align-items-center">
-                    <span><i class="bi bi-plus-circle me-1"></i> Input / Tambah KD Manual</span>
-                    <span class="badge bg-light text-muted border">Opsional</span>
-                </div>
-                <div class="card-body p-4">
-                    <div class="alert alert-info border-0 p-2 mb-3 small" style="font-size: 11px;">
-                        <i class="bi bi-info-circle-fill me-1"></i> <b>Info:</b> Semua KD dari akun ternak otomatis tampil di tabel sebelah kanan tanpa perlu diinput manual. Formulir ini hanya jika ingin menambah KD baru secara mandiri.
-                    </div>
-                    <form action="/stok/tambah" method="POST">
-                        @csrf
-                        <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold">NOMOR KD</label>
-                            <div class="input-group">
-                                <span class="input-group-text bg-light">#</span>
-                                <input type="number" class="form-control" name="kd_number" required placeholder="Contoh: 3124">
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold">⏱️ WAKTU JEDA MACUL (JAM)</label>
-                            <div class="input-group">
-                                <input type="number" step="0.5" min="0.5" max="48" class="form-control" name="cooldown_hours" value="4.0" placeholder="4.0">
-                                <span class="input-group-text">Jam Sekali</span>
-                            </div>
-                        </div>
-                        <div class="row g-2 mb-3">
-                            <div class="col-6">
-                                <label class="form-label text-muted small fw-bold">🌽 FOOD (M)</label>
-                                <input type="number" step="0.1" class="form-control" name="food" value="0">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-muted small fw-bold">🪵 WOOD (M)</label>
-                                <input type="number" step="0.1" class="form-control" name="wood" value="0">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-muted small fw-bold">🪨 STONE (M)</label>
-                                <input type="number" step="0.1" class="form-control" name="stone" value="0">
-                            </div>
-                            <div class="col-6">
-                                <label class="form-label text-muted small fw-bold">🪙 GOLD (M)</label>
-                                <input type="number" step="0.1" class="form-control" name="gold" value="0">
-                            </div>
-                        </div>
-                        <button type="submit" class="btn btn-primary w-100 fw-bold"><i class="bi bi-save me-2"></i>Simpan Stok</button>
-                    </form>
-                </div>
-            </div>
-        </div>
-
-        <!-- Kolom Kanan: Tabel Data Stok Kingdom (Semua KD dari Akun & Char) -->
-        <div class="col-xl-8 col-lg-7">
+        <!-- Kolom Kanan (Di HP Tampil Pertama): Tabel & Card Data Stok Kingdom -->
+        <div class="col-xl-8 col-lg-7 order-1 order-lg-2 mb-3 mb-lg-0">
             <div class="card shadow-sm">
                 <div class="card-header bg-white text-dark d-flex justify-content-between align-items-center py-3">
-                    <span class="fs-6 fw-bold"><i class="bi bi-table text-primary me-2"></i>Database Stok Farm (Sinkron Otomatis)</span>
+                    <span class="fs-6 fw-bold"><i class="bi bi-table text-primary me-2"></i>Database Stok Farm</span>
                     <span class="badge bg-success-subtle text-success border border-success-subtle">
-                        <i class="bi bi-check-circle me-1"></i>Semua KD Terdaftar
+                        <i class="bi bi-check-circle me-1"></i>{{ $kingdoms->count() }} KD Terdaftar
                     </span>
                 </div>
                 <div class="card-body p-0">
-                    <div class="table-responsive">
+                    <!-- Desktop Table -->
+                    <div class="table-responsive d-none d-md-block">
                         <table class="table table-hover align-middle m-0">
                             <thead class="table-light text-muted small">
                                 <tr>
@@ -404,6 +383,114 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <!-- Mobile Card List (Super Clean & Satset di Layar HP) -->
+                    <div class="d-md-none p-2">
+                        @forelse ($kingdoms as $kd)
+                            <div class="border rounded-3 p-3 mb-2 bg-white shadow-xs">
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-primary text-white fs-6 px-2 py-1">KD #{{ $kd->kd_number }}</span>
+                                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle fw-semibold" style="font-size: 11px;">
+                                            <i class="bi bi-clock-history me-1"></i>{{ $kd->cooldown_hours ?? 4 }} Jam
+                                        </span>
+                                    </div>
+                                    <div class="d-flex gap-1">
+                                        <a href="/stok/{{ $kd->id }}/edit" class="btn btn-sm btn-outline-warning text-dark py-1 px-2" title="Edit Stok & Jeda">
+                                            <i class="bi bi-pencil-fill"></i>
+                                        </a>
+                                        <form action="/stok/{{ $kd->id }}/hapus" method="POST" class="m-0" onsubmit="return confirm('Hapus KD #{{ $kd->kd_number }} beserta stoknya?');">
+                                            @csrf
+                                            <button type="submit" class="btn btn-sm btn-outline-danger py-1 px-2" title="Hapus">
+                                                <i class="bi bi-trash-fill"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </div>
+                                <div class="row g-1 text-center" style="font-size: 12px;">
+                                    <div class="col-3">
+                                        <div class="bg-light p-1 rounded border">
+                                            <div class="text-muted" style="font-size: 10px;">🌽 Food</div>
+                                            <div class="fw-bold text-success">{{ $kd->food }}M</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="bg-light p-1 rounded border">
+                                            <div class="text-muted" style="font-size: 10px;">🪵 Wood</div>
+                                            <div class="fw-bold text-success">{{ $kd->wood }}M</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="bg-light p-1 rounded border">
+                                            <div class="text-muted" style="font-size: 10px;">🪨 Stone</div>
+                                            <div class="fw-bold text-secondary">{{ $kd->stone }}M</div>
+                                        </div>
+                                    </div>
+                                    <div class="col-3">
+                                        <div class="bg-light p-1 rounded border">
+                                            <div class="text-muted" style="font-size: 10px;">🪙 Gold</div>
+                                            <div class="fw-bold text-warning">{{ $kd->gold }}M</div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        @empty
+                            <div class="text-center py-4 text-muted small">
+                                <i class="bi bi-inbox fs-2 d-block mb-1 text-secondary opacity-50"></i> Belum ada data Kingdom.
+                            </div>
+                        @endforelse
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Kolom Kiri (Di HP Tampil Kedua): Form Tambah / Update KD Manual (Opsional) -->
+        <div class="col-xl-4 col-lg-5 order-2 order-lg-1">
+            <div class="card shadow-sm">
+                <div class="card-header text-primary d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-plus-circle me-1"></i> Input / Tambah KD Manual</span>
+                    <span class="badge bg-light text-muted border">Opsional</span>
+                </div>
+                <div class="card-body p-3 p-md-4">
+                    <div class="alert alert-info border-0 p-2 mb-3 small" style="font-size: 11px;">
+                        <i class="bi bi-info-circle-fill me-1"></i> <b>Info:</b> Semua KD dari akun ternak otomatis tampil di daftar tanpa perlu input manual. Gunakan form ini hanya jika ingin menambah KD baru secara manual.
+                    </div>
+                    <form action="/stok/tambah" method="POST">
+                        @csrf
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">NOMOR KD</label>
+                            <div class="input-group">
+                                <span class="input-group-text bg-light">#</span>
+                                <input type="number" class="form-control" name="kd_number" required placeholder="Contoh: 3124">
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small fw-bold">⏱️ WAKTU JEDA MACUL (JAM)</label>
+                            <div class="input-group">
+                                <input type="number" step="0.5" min="0.5" max="48" class="form-control" name="cooldown_hours" value="4.0" placeholder="4.0">
+                                <span class="input-group-text">Jam Sekali</span>
+                            </div>
+                        </div>
+                        <div class="row g-2 mb-3">
+                            <div class="col-6">
+                                <label class="form-label text-muted small fw-bold">🌽 FOOD (M)</label>
+                                <input type="number" step="0.1" class="form-control" name="food" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label text-muted small fw-bold">🪵 WOOD (M)</label>
+                                <input type="number" step="0.1" class="form-control" name="wood" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label text-muted small fw-bold">🪨 STONE (M)</label>
+                                <input type="number" step="0.1" class="form-control" name="stone" value="0">
+                            </div>
+                            <div class="col-6">
+                                <label class="form-label text-muted small fw-bold">🪙 GOLD (M)</label>
+                                <input type="number" step="0.1" class="form-control" name="gold" value="0">
+                            </div>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 fw-bold"><i class="bi bi-save me-2"></i>Simpan Stok</button>
+                    </form>
                 </div>
             </div>
         </div>

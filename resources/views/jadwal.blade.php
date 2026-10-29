@@ -62,19 +62,21 @@
 @php $isAdmin = $isAdmin ?? false; @endphp
 
 <div class="content">
-    <div class="d-flex justify-content-between align-items-center mb-4">
+    <div class="d-flex justify-content-between align-items-center mb-3">
         <div>
-            <h3 class="fw-bold text-dark m-0">Jadwal Eksekusi Farm (Minimalist View)</h3>
-            <p class="text-muted small mb-0">Pantau dan panen serentak akun farm berdasarkan Kingdom dengan sistem otomatis multi-operator</p>
+            <h4 class="fw-bold text-dark m-0 d-flex align-items-center gap-2">
+                <i class="bi bi-alarm-fill text-primary"></i> Jadwal Farm
+            </h4>
+            <p class="text-muted small mb-0">Pantau & panen serentak akun farm multi-operator</p>
         </div>
-        <div class="d-flex align-items-center gap-2">
+        <div class="d-flex align-items-center gap-1">
             @if($isAdmin)
                 <span class="badge bg-danger px-2 py-1" style="font-size: 11px;" title="Anda login sebagai Admin">
                     <i class="bi bi-shield-lock-fill me-1"></i>Admin
                 </span>
             @endif
-            <a href="/akun" class="btn btn-outline-primary btn-sm">
-                <i class="bi bi-gear-fill me-1"></i> Kelola Char
+            <a href="/akun" class="btn btn-outline-primary btn-sm py-1 px-2" style="font-size: 12px;">
+                <i class="bi bi-gear-fill me-1"></i> <span class="d-none d-sm-inline">Kelola </span>Char
             </a>
         </div>
     </div>
