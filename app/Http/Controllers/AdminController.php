@@ -70,6 +70,24 @@ class AdminController extends Controller
     }
 
     /**
+     * Reset password user tertentu
+     */
+    public function resetPassword(Request $request, $id)
+    {
+        $this->requireAdmin();
+
+        $request->validate([
+            'password' => 'required|string|min:6',
+        ]);
+
+        $user = User::findOrFail($id);
+        $user->password = bcrypt($request->password);
+        $user->save();
+
+        return back()->with('success', "✅ Password user {$user->name} berhasil diubah ke: {$request->password}");
+    }
+
+    /**
      * Adjust jumlah macul (farm_count) per karakter per worker
      * Action: increment | decrement | reset | set
      */

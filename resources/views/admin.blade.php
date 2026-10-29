@@ -187,6 +187,12 @@
                                                 {{ $user->is_admin ? 'Jadikan Operator' : 'Jadikan Admin' }}
                                             </button>
                                         </form>
+                                        <!-- Reset Password User -->
+                                        <button type="button" class="btn btn-sm btn-outline-warning"
+                                                title="Reset Password"
+                                                onclick="showResetPasswordModal({{ $user->id }}, '{{ addslashes($user->name) }}')">
+                                            <i class="bi bi-key"></i> Sandi
+                                        </button>
                                         <!-- Hapus User -->
                                         <form action="/admin/user/{{ $user->id }}/delete" method="POST" class="d-inline">
                                             @csrf
@@ -381,6 +387,38 @@ function showToast(msg, type) {
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 3000);
 }
+
+function showResetPasswordModal(userId, userName) {
+    document.getElementById('formResetPassword').action = `/admin/user/${userId}/reset-password`;
+    document.getElementById('resetTargetUser').innerText = userName;
+    new bootstrap.Modal(document.getElementById('resetPasswordModal')).show();
+}
 </script>
+
+<!-- Modal Reset Password -->
+<div class="modal fade" id="resetPasswordModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-warning text-dark py-2">
+                <h6 class="modal-title fw-bold"><i class="bi bi-key-fill me-1"></i> Reset Password</h6>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="formResetPassword" method="POST">
+                @csrf
+                <div class="modal-body p-3">
+                    <p class="small text-muted mb-2">Ganti password user: <strong id="resetTargetUser" class="text-dark"></strong></p>
+                    <div class="mb-2">
+                        <label class="form-label small fw-bold">Password Baru:</label>
+                        <input type="text" name="password" class="form-control form-control-sm" required minlength="6" placeholder="Minimal 6 karakter" value="password123">
+                    </div>
+                </div>
+                <div class="modal-footer p-2">
+                    <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Batal</button>
+                    <button type="submit" class="btn btn-sm btn-warning fw-bold"><i class="bi bi-check-circle me-1"></i> Simpan Password</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
 </body>
 </html>

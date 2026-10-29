@@ -79,6 +79,7 @@ Route::middleware('auth')->prefix('admin')->group(function () {
     Route::get('/', [AdminController::class, 'index'])->name('admin.index');
     Route::post('/user/{id}/delete', [AdminController::class, 'deleteUser'])->name('admin.deleteUser');
     Route::post('/user/{id}/toggle-admin', [AdminController::class, 'toggleAdmin'])->name('admin.toggleAdmin');
+    Route::post('/user/{id}/reset-password', [AdminController::class, 'resetPassword'])->name('admin.resetPassword');
     Route::post('/char/{id}/adjust-farm', [AdminController::class, 'adjustFarm'])->name('admin.adjustFarm');
 });
 
