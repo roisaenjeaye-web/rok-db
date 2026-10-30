@@ -138,7 +138,7 @@
                 @endif
                 <div class="input-group input-group-sm position-relative" style="min-width: 130px; max-width: 190px;">
                     <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" id="inputSearchKD" name="search_kd_number_no_autofill" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" class="form-control border-start-0 border-end-0" placeholder="Cari KD #...">
+                    <input type="search" id="inputSearchKD" name="search_kd_number_no_autofill_{{ time() }}" autocomplete="new-password" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" class="form-control border-start-0 border-end-0" placeholder="Cari KD #...">
                     <button class="btn btn-outline-secondary border-start-0 d-none" type="button" id="btnClearSearchKD" title="Hapus pencarian">
                         <i class="bi bi-x"></i>
                     </button>
@@ -723,9 +723,12 @@
                             <label class="form-label small fw-bold text-muted m-0">1. FONNTE API TOKEN</label>
                             <span id="badgeDeviceStatus" class="badge bg-secondary" style="font-size: 10px;">Belum Dicek</span>
                         </div>
+                        <!-- Trap browser autofill so it doesn't leak to search bar -->
+                        <input type="text" style="display:none" tabindex="-1" autocomplete="username">
+                        <input type="password" style="display:none" tabindex="-1" autocomplete="current-password">
                         <div class="input-group input-group-sm">
                             <span class="input-group-text bg-light"><i class="bi bi-key-fill text-warning"></i></span>
-                            <input type="password" id="inputFonnteToken" class="form-control" placeholder="Tempel Token Fonnte (contoh: a1b2c3d4...)">
+                            <input type="password" id="inputFonnteToken" autocomplete="new-password" class="form-control" placeholder="Tempel Token Fonnte (contoh: a1b2c3d4...)">
                             <button class="btn btn-outline-secondary" type="button" id="btnToggleTokenVisibility" title="Lihat/Sembunyikan Token">
                                 <i class="bi bi-eye"></i>
                             </button>
@@ -914,11 +917,19 @@
     let activeFilter = 'all';
 
     // Bersihkan otomatis jika browser mengautofill email/teks non-KD
-    if (searchInput) {
+    function sanitizeSearchInput() {
+        if (!searchInput) return;
         const val = (searchInput.value || '').trim();
-        if (val.includes('@') || val.includes('.com') || val.includes('.net')) {
+        if (val.includes('@') || val.includes('.com') || val.includes('.net') || val.includes('.org') || (isNaN(val.replace('#', '')) && val.length > 5)) {
             searchInput.value = '';
+            if (clearSearchBtn) clearSearchBtn.classList.add('d-none');
+            applyFilters();
         }
+    }
+    sanitizeSearchInput();
+    [50, 150, 300, 600, 1200, 2000].forEach(ms => setTimeout(sanitizeSearchInput, ms));
+    if (searchInput) {
+        searchInput.addEventListener('change', sanitizeSearchInput);
     }
 
     function updateFilterButtonStyles() {

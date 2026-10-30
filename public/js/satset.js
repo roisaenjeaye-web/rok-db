@@ -492,11 +492,19 @@
         let activeFilter = 'all';
 
         // Bersihkan otomatis jika browser mengautofill email ke input cari KD
-        if (searchInput) {
+        function sanitizeSearchInput() {
+            if (!searchInput) return;
             const val = (searchInput.value || '').trim();
-            if (val.includes('@') || val.includes('.com') || val.includes('.net')) {
+            if (val.includes('@') || val.includes('.com') || val.includes('.net') || val.includes('.org') || (isNaN(val.replace('#', '')) && val.length > 5)) {
                 searchInput.value = '';
+                if (clearSearchBtn) clearSearchBtn.classList.add('d-none');
+                applyFilters();
             }
+        }
+        sanitizeSearchInput();
+        [50, 150, 300, 600, 1200, 2000].forEach(ms => setTimeout(sanitizeSearchInput, ms));
+        if (searchInput) {
+            searchInput.addEventListener('change', sanitizeSearchInput);
         }
 
         function updateFilterButtonStyles() {
