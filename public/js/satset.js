@@ -932,6 +932,9 @@
             const inputToken = document.getElementById('inputFonnteToken');
             const inputPhone = document.getElementById('inputSettingWAPhone');
             const checkAuto = document.getElementById('checkAutoNotify');
+            const inputUnreplied = document.getElementById('inputSpamUnrepliedInterval');
+            const inputMaxWork = document.getElementById('inputMaxWorkMinutes');
+            const inputOverdue = document.getElementById('inputSpamOverdueInterval');
             const badgeStatus = document.getElementById('badgeDeviceStatus');
             const btnToggleEye = document.getElementById('btnToggleTokenVisibility');
             const btnSave = document.getElementById('btnSaveBotSettings');
@@ -939,6 +942,37 @@
             const btnTestConn = document.getElementById('btnTestDeviceConn');
             const inputWebhook = document.getElementById('inputWebhookUrl');
             const btnCopyWebhook = document.getElementById('btnCopyWebhookUrl');
+
+            function syncQuickBtns(selector, val) {
+                document.querySelectorAll(selector).forEach(b => {
+                    if (parseInt(b.dataset.val, 10) === parseInt(val, 10)) {
+                        b.classList.remove('btn-outline-secondary');
+                        b.classList.add('active', 'btn-outline-primary', 'fw-bold');
+                    } else {
+                        b.classList.remove('active', 'btn-outline-primary', 'fw-bold');
+                        b.classList.add('btn-outline-secondary');
+                    }
+                });
+            }
+
+            // Quick button click listeners
+            document.addEventListener('click', function(e) {
+                const bUnreplied = e.target.closest('.btn-quick-unreplied');
+                if (bUnreplied && inputUnreplied) {
+                    inputUnreplied.value = bUnreplied.dataset.val;
+                    syncQuickBtns('.btn-quick-unreplied', bUnreplied.dataset.val);
+                }
+                const bMaxWork = e.target.closest('.btn-quick-maxwork');
+                if (bMaxWork && inputMaxWork) {
+                    inputMaxWork.value = bMaxWork.dataset.val;
+                    syncQuickBtns('.btn-quick-maxwork', bMaxWork.dataset.val);
+                }
+                const bOverdue = e.target.closest('.btn-quick-overdue');
+                if (bOverdue && inputOverdue) {
+                    inputOverdue.value = bOverdue.dataset.val;
+                    syncQuickBtns('.btn-quick-overdue', bOverdue.dataset.val);
+                }
+            });
 
             if (btnCopyWebhook && inputWebhook) {
                 btnCopyWebhook.addEventListener('click', function () {
@@ -970,6 +1004,19 @@
                         if (inputPhone) inputPhone.value = data.target_phone || '';
                         if (checkAuto) checkAuto.checked = !!data.is_auto_notify;
                         if (inputWebhook && data.webhook_url) inputWebhook.value = data.webhook_url;
+
+                        if (inputUnreplied && data.spam_unreplied_interval) {
+                            inputUnreplied.value = data.spam_unreplied_interval;
+                            syncQuickBtns('.btn-quick-unreplied', data.spam_unreplied_interval);
+                        }
+                        if (inputMaxWork && data.max_work_minutes) {
+                            inputMaxWork.value = data.max_work_minutes;
+                            syncQuickBtns('.btn-quick-maxwork', data.max_work_minutes);
+                        }
+                        if (inputOverdue && data.spam_overdue_interval) {
+                            inputOverdue.value = data.spam_overdue_interval;
+                            syncQuickBtns('.btn-quick-overdue', data.spam_overdue_interval);
+                        }
 
                         if (data.target_phone) {
                             localStorage.setItem('rok_wa_phone', data.target_phone);
@@ -1028,6 +1075,9 @@
                     const tokenVal = inputToken ? inputToken.value.trim() : '';
                     const phoneVal = inputPhone ? inputPhone.value.trim() : '';
                     const isAutoVal = checkAuto ? checkAuto.checked : true;
+                    const unrepliedVal = inputUnreplied ? parseInt(inputUnreplied.value, 10) : 15;
+                    const maxWorkVal = inputMaxWork ? parseInt(inputMaxWork.value, 10) : 30;
+                    const overdueVal = inputOverdue ? parseInt(inputOverdue.value, 10) : 5;
 
                     btnSave.disabled = true;
                     btnSave.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
@@ -1043,7 +1093,10 @@
                             body: JSON.stringify({
                                 fonnte_token: tokenVal,
                                 target_phone: phoneVal,
-                                is_auto_notify: isAutoVal
+                                is_auto_notify: isAutoVal,
+                                spam_unreplied_interval: unrepliedVal,
+                                max_work_minutes: maxWorkVal,
+                                spam_overdue_interval: overdueVal
                             })
                         });
                         const data = await res.json();

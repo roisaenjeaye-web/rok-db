@@ -114,16 +114,28 @@
                     <i class="bi bi-clock-history me-1"></i> Sedang Cooldown
                 </button>
             </div>
-            <div class="d-flex align-items-center gap-2 ms-auto">
+            <div class="d-flex align-items-center gap-1 ms-auto flex-wrap">
+                @if($isAdmin)
+                    <button type="button" class="btn btn-sm {{ $isAutoNotify ? 'btn-success' : 'btn-dark' }} rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnToggleBotCD" data-active="{{ $isAutoNotify ? '1' : '0' }}" title="{{ $isAutoNotify ? 'Klik untuk Matikan CD (Mode Tidur) — Bot tidak akan spam WA' : 'Klik untuk Aktifkan CD Kembali' }}" style="font-size: 11px;">
+                        <i class="bi {{ $isAutoNotify ? 'bi-bell-fill text-warning' : 'bi-moon-stars-fill text-warning' }}"></i>
+                        <span>{{ $isAutoNotify ? 'CD: AKTIF' : 'CD: TIDUR' }}</span>
+                    </button>
+                @else
+                    <span class="badge {{ $isAutoNotify ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-muted border border-secondary-subtle' }} rounded-pill py-1 px-2 d-inline-flex align-items-center gap-1" style="font-size: 11px;" title="{{ $isAutoNotify ? 'Bot CD Aktif' : 'Bot CD sedang dimatikan oleh Admin (Mode Tidur)' }}">
+                        <i class="bi {{ $isAutoNotify ? 'bi-bell-fill' : 'bi-moon-stars-fill' }}"></i> {{ $isAutoNotify ? 'CD Aktif' : 'Mode Tidur' }}
+                    </span>
+                @endif
                 <button type="button" class="btn btn-sm btn-success rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnBotShareAll" style="font-size: 12px;" title="Kirim Rekap Otomatis via Bot Fonnte (Tanpa Buka WA)">
                     <i class="bi bi-robot fs-6"></i> <span>Bot Rekap</span>
                 </button>
                 <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnShareAllWA" style="font-size: 12px;" title="Buka Chat WhatsApp Rekap">
                     <i class="bi bi-whatsapp fs-6"></i> <span>Manual WA</span>
                 </button>
-                <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center p-0" style="width: 28px; height: 28px; font-size: 12px;" data-bs-toggle="modal" data-bs-target="#modalSettingWA" title="Pengaturan Bot WA Fonnte">
+                @if($isAdmin)
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center p-0" style="width: 28px; height: 28px; font-size: 12px;" data-bs-toggle="modal" data-bs-target="#modalSettingWA" title="Pengaturan Bot WA Fonnte (Admin Only)">
                     <i class="bi bi-gear-fill"></i>
                 </button>
+                @endif
                 <div class="input-group input-group-sm position-relative" style="min-width: 130px; max-width: 190px;">
                     <span class="input-group-text bg-light border-end-0"><i class="bi bi-search text-muted"></i></span>
                     <input type="text" id="inputSearchKD" name="search_kd_number_no_autofill" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-form-type="other" class="form-control border-start-0 border-end-0" placeholder="Cari KD #...">
@@ -195,7 +207,13 @@
                                 <i class="bi bi-clock-history me-1"></i>{{ $kdCooldownHours }}j
                             </button>
                         </div>
-                        <div class="kd-status-badge">
+                        <div class="kd-status-badge d-flex align-items-center gap-1">
+                            @php
+                                $isKdMuted = (bool) \App\Models\BotSetting::get("kd_mute_{$kd}", false);
+                            @endphp
+                            @if($isKdMuted)
+                                <span class="badge bg-secondary" title="Pengingat KD ini dimatikan oleh Admin (Mode Tidur)"><i class="bi bi-moon-stars-fill"></i> Tidur</span>
+                            @endif
                             @if($readyCount == 0)
                                 <span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> All Cooldown</span>
                             @else
@@ -212,25 +230,25 @@
                                 $minsSinceReply = $repliedAt ? abs((int) round(now()->diffInMinutes($repliedAt))) : null;
                             @endphp
                             @if($repliedAt)
-                                @if($minsSinceReply < 30)
+                                @if($minsSinceReply < $maxWorkMinutes)
                                     <div class="alert alert-info py-1 px-2 mb-2 d-flex justify-content-between align-items-center rounded-2 border-0 shadow-xs" style="font-size: 11px;">
                                         <span class="text-truncate me-1">
                                             <i class="bi bi-person-check-fill text-primary me-1"></i> Dibalas: <b>{{ $currentKd->replied_by ?: 'Operator' }}</b>
                                         </span>
-                                        <span class="badge bg-primary text-white" title="Sisa tenggat waktu sebelum spam 5 menit">Tenggat {{ 30 - $minsSinceReply }}m</span>
+                                        <span class="badge bg-primary text-white" title="Sisa batas waktu pengerjaan sebelum spam overdue">Tenggat {{ max(0, $maxWorkMinutes - $minsSinceReply) }}m</span>
                                     </div>
                                 @else
                                     <div class="alert alert-danger py-1 px-2 mb-2 d-flex justify-content-between align-items-center rounded-2 border-danger shadow-xs" style="font-size: 11px;">
                                         <span class="text-truncate me-1 fw-bold text-danger">
                                             <i class="bi bi-exclamation-triangle-fill text-danger me-1"></i> OVERDUE ({{ $minsSinceReply }}m)! Belum diceklis
                                         </span>
-                                        <span class="badge bg-danger text-white">Spam 5m Aktif</span>
+                                        <span class="badge bg-danger text-white">Spam {{ $spamOverdueInterval }}m Aktif</span>
                                     </div>
                                 @endif
                             @else
                                 <div class="alert alert-warning py-1 px-2 mb-2 d-flex justify-content-between align-items-center rounded-2 border-0 shadow-xs" style="font-size: 11px;">
                                     <span class="text-truncate me-1 text-dark">
-                                        <i class="bi bi-bell-fill text-warning me-1"></i> Belum Dibalas (Spam 5m)
+                                        <i class="bi bi-bell-fill text-warning me-1"></i> Belum Dibalas (Spam {{ $spamUnrepliedInterval }}m)
                                     </span>
                                     <button type="button" class="btn btn-xs btn-outline-dark rounded-pill px-2 py-0 fw-bold btn-ack-kd" data-kd="{{ $kd }}" title="Tandai Anda sedang mengerjakan KD ini">
                                         <i class="bi bi-hand-thumbs-up me-1"></i>Saya OTW
@@ -580,6 +598,21 @@
                                 <div class="alert alert-info py-2 px-3 small mb-3 border-0 bg-info bg-opacity-10 text-dark">
                                     <i class="bi bi-info-circle me-1 text-primary"></i> <i>Misal diisi 2 jam, maka hitung mundur siap panen KD #{{ $kd }} dihitung 2 jam setelah panen terakhir.</i>
                                 </div>
+
+                                @if($isAdmin)
+                                <div class="border-top pt-2 mt-2 mb-3">
+                                    <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+                                        <input class="form-check-input ms-0" type="checkbox" name="is_kd_muted" value="1" id="checkMuteKD{{ $kd }}" {{ $isKdMuted ? 'checked' : '' }} style="cursor: pointer;">
+                                        <label class="form-check-label small fw-bold text-dark" for="checkMuteKD{{ $kd }}" style="cursor: pointer;">
+                                            <i class="bi bi-moon-stars text-secondary me-1"></i> Matikan CD KD Ini (Mode Tidur)
+                                        </label>
+                                    </div>
+                                    <div class="text-muted small ps-4 mt-1" style="font-size: 11px;">
+                                        Bot tidak akan spam WhatsApp khusus untuk KD ini saat jam tidur.
+                                    </div>
+                                </div>
+                                @endif
+
                                 <button type="submit" class="btn btn-primary btn-sm w-100 fw-bold py-2 shadow-sm">
                                     <i class="bi bi-save me-1"></i> Simpan Jeda KD #{{ $kd }}
                                 </button>
@@ -731,28 +764,96 @@
                         </div>
                     </div>
 
-                    <!-- Switch Auto Send -->
+                    <!-- Switch Auto Send / Mode Tidur -->
                     <div class="card bg-light border-0 p-2 mb-3">
                         <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
                             <input class="form-check-input ms-0" type="checkbox" role="switch" id="checkAutoNotify" checked style="cursor: pointer; width: 36px; height: 20px;">
                             <label class="form-check-label fw-bold small text-dark" for="checkAutoNotify" style="cursor: pointer;">
-                                🚀 Aktifkan Pengingat Otomatis (Auto-Bot)
+                                🔔 Aktifkan Pengingat & Spam Bot CD
                             </label>
                         </div>
                         <div class="text-muted small ps-5 mt-1" style="font-size: 11px;">
-                            Bot otomatis mengirim pesan WhatsApp setiap ada KD yang masa jedanya habis tanpa perlu Anda memencet tombol manual!
+                            <b>Mode Tidur:</b> Matikan saklar ini saat jam istirahat/tidur agar bot tidak spam pesan ke grup WhatsApp ("Orang kan tidur juga").
+                        </div>
+                    </div>
+
+                    <!-- Pengaturan Interval & Batas Waktu Panen -->
+                    <div class="card border p-2 mb-3 bg-light">
+                        <div class="fw-bold small text-dark mb-2 pb-1 border-bottom">
+                            <i class="bi bi-sliders text-primary me-1"></i> ATURAN JEDA SPAM & WAKTU PENGERJAAN
+                        </div>
+
+                        <!-- 1. Spam Saat Selesai CD (Belum Dibalas) -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted mb-1" style="font-size: 11px;">
+                                1. INTERVAL SPAM SIAP PANEN (BELUM DIBALAS):
+                            </label>
+                            <div class="input-group input-group-sm mb-1">
+                                <input type="number" id="inputSpamUnrepliedInterval" class="form-control text-center fw-bold text-danger" value="15" min="1" max="1440">
+                                <span class="input-group-text fw-bold">Menit Sekali</span>
+                            </div>
+                            <div class="d-flex gap-1 flex-wrap mb-1">
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-unreplied" data-val="10">10m</button>
+                                <button type="button" class="btn btn-xs btn-outline-primary active fw-bold btn-quick-unreplied" data-val="15">15m (Standar)</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-unreplied" data-val="20">20m</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-unreplied" data-val="30">30m</button>
+                            </div>
+                            <div class="text-muted" style="font-size: 10px;">
+                                Jeda spam bot jika KD sudah siap panen tetapi belum ada yang membalas chat di grup WA.
+                            </div>
+                        </div>
+
+                        <!-- 2. Batas Waktu Maksimal Ngerjain Setelah Balas OTW -->
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold text-muted mb-1" style="font-size: 11px;">
+                                2. BATAS MAKSIMAL WAKTU NGERJAIN (SETELAH BALAS "OTW"):
+                            </label>
+                            <div class="input-group input-group-sm mb-1">
+                                <input type="number" id="inputMaxWorkMinutes" class="form-control text-center fw-bold text-primary" value="30" min="1" max="1440">
+                                <span class="input-group-text fw-bold">Menit</span>
+                            </div>
+                            <div class="d-flex gap-1 flex-wrap mb-1">
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-maxwork" data-val="15">15m</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-maxwork" data-val="20">20m</button>
+                                <button type="button" class="btn btn-xs btn-outline-primary active fw-bold btn-quick-maxwork" data-val="30">30m (Standar)</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-maxwork" data-val="45">45m</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-maxwork" data-val="60">60m (1 Jam)</button>
+                            </div>
+                            <div class="text-muted" style="font-size: 10px;">
+                                Toleransi waktu bagi joki untuk panen setelah membalas di WA. Bot tidak spam selama periode ini.
+                            </div>
+                        </div>
+
+                        <!-- 3. Spam Overdue Jika Melewati Batas Waktu -->
+                        <div class="mb-1">
+                            <label class="form-label small fw-bold text-muted mb-1" style="font-size: 11px;">
+                                3. INTERVAL SPAM OVERDUE (JIKA LEWAT BATAS WAKTU):
+                            </label>
+                            <div class="input-group input-group-sm mb-1">
+                                <input type="number" id="inputSpamOverdueInterval" class="form-control text-center fw-bold text-warning" value="5" min="1" max="1440">
+                                <span class="input-group-text fw-bold">Menit Sekali</span>
+                            </div>
+                            <div class="d-flex gap-1 flex-wrap mb-1">
+                                <button type="button" class="btn btn-xs btn-outline-primary active fw-bold btn-quick-overdue" data-val="5">5m (Standar)</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-overdue" data-val="10">10m</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-overdue" data-val="15">15m</button>
+                            </div>
+                            <div class="text-muted" style="font-size: 10px;">
+                                Jika batas waktu ngerjain habis tapi belum diceklis panen di web, bot akan spam tiap berapa menit.
+                            </div>
                         </div>
                     </div>
 
                     <!-- Panduan Aturan Spam & Anti-Lupa -->
                     <div class="alert alert-light border small p-2 mb-3 shadow-xs">
                         <div class="fw-bold text-dark mb-1 d-flex align-items-center">
-                            <i class="bi bi-shield-check text-success me-1 fs-6"></i> Aturan Spam & Anti-Lupa Bot:
+                            <i class="bi bi-shield-check text-success me-1 fs-6"></i> Ringkasan Alur Kerja Bot:
                         </div>
                         <ul class="mb-0 ps-3" style="font-size: 11px;">
-                            <li><b>Belum Dibalas:</b> Jika tidak ada yang membalas chat WA bot, bot otomatis <b>spam setiap 5 menit sekali</b>.</li>
-                            <li><b>Sudah Dibalas:</b> Saat ada balasan WA (misal "otw") atau klik <i>Saya OTW</i> di web, bot memberi waktu <b>30 menit</b> untuk menyelesaikan panen.</li>
-                            <li><b>Overdue (> 30 Menit):</b> Jika dalam 30 menit belum dikelarin/diceklis di web, bot otomatis <b>spam setiap 5 menit sekali</b> sampai selesai panen!</li>
+                            <li><b>Belum Dibalas:</b> Spam dikirim setiap <b>15 menit sekali</b> (dapat diatur).</li>
+                            <li><b>Balas OTW / Siap:</b> Diberi toleransi waktu ngerjain (misal <b>30 menit</b>) tanpa spam.</li>
+                            <li><b>Overdue:</b> Jika lewat batas waktu belum selesai di web, bot otomatis <b>spam tiap 5 menit sekali</b>.</li>
+                            <li><b>Mode Tidur:</b> Matikan CD di bar atas atau saklar di atas saat tim istirahat malam (Hanya Admin).</li>
                         </ul>
                     </div>
 
@@ -1090,7 +1191,49 @@
         });
     });
 
-    // 5. Restore scroll position after reload (satset UX)
+    // 5. AJAX Handler Toggle Cepat Bot CD (Mode Tidur) - Admin Only
+    const btnToggleBotCD = document.getElementById('btnToggleBotCD');
+    if (btnToggleBotCD) {
+        btnToggleBotCD.addEventListener('click', async function() {
+            if (btnToggleBotCD.disabled) return;
+            btnToggleBotCD.disabled = true;
+            const origHtml = btnToggleBotCD.innerHTML;
+            btnToggleBotCD.innerHTML = '<span class="spinner-border spinner-border-sm" style="width: 10px; height: 10px;"></span>';
+
+            try {
+                const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '';
+                const res = await fetch('/bot/toggle-auto-notify', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest',
+                        'Accept': 'application/json'
+                    }
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    sessionStorage.setItem('satset_scroll_pos', window.scrollY);
+                    const toast = document.createElement('div');
+                    toast.className = 'alert ' + (data.is_auto_notify ? 'alert-success' : 'alert-dark') + ' alert-dismissible position-fixed shadow-lg border-0 fw-bold';
+                    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 320px; font-size: 13px;';
+                    toast.innerHTML = `<i class="bi ${data.is_auto_notify ? 'bi-bell-fill' : 'bi-moon-stars-fill'} me-2"></i>${data.message}<button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => { window.location.reload(); }, 600);
+                } else {
+                    btnToggleBotCD.disabled = false;
+                    btnToggleBotCD.innerHTML = origHtml;
+                    alert(data.message || 'Gagal mengubah status Bot CD');
+                }
+            } catch (err) {
+                btnToggleBotCD.disabled = false;
+                btnToggleBotCD.innerHTML = origHtml;
+                alert('Gagal menghubungi server');
+            }
+        });
+    }
+
+    // 6. Restore scroll position after reload (satset UX)
     const savedScroll = sessionStorage.getItem('satset_scroll_pos');
     if (savedScroll) {
         window.scrollTo(0, parseInt(savedScroll, 10));

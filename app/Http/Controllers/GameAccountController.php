@@ -369,8 +369,15 @@ class GameAccountController extends Controller
         $activeWorker = $this->getActiveWorker(request());
         $kingdoms = Kingdom::all()->keyBy('kd_number');
         $isAdmin = auth()->check() ? auth()->user()->isAdmin() : false;
+        $isAutoNotify = (bool) \App\Models\BotSetting::get('is_auto_notify', true);
+        $spamUnrepliedInterval = (int) \App\Models\BotSetting::get('spam_unreplied_interval', 15);
+        $maxWorkMinutes = (int) \App\Models\BotSetting::get('max_work_minutes', 30);
+        $spamOverdueInterval = (int) \App\Models\BotSetting::get('spam_overdue_interval', 5);
 
-        return view('jadwal', compact('groupedByKD', 'kdStats', 'knownWorkers', 'activeWorker', 'kingdoms', 'isAdmin'));
+        return view('jadwal', compact(
+            'groupedByKD', 'kdStats', 'knownWorkers', 'activeWorker', 'kingdoms', 'isAdmin',
+            'isAutoNotify', 'spamUnrepliedInterval', 'maxWorkMinutes', 'spamOverdueInterval'
+        ));
     }
 
     // Panen Super Bulk satu Kingdom serentak dengan pencatatan nama joki
@@ -478,6 +485,11 @@ class GameAccountController extends Controller
 
         $kingdom->update(['cooldown_hours' => $cooldownHours]);
 
+        // Pengaturan Mute/Tidur Khusus KD Ini (Admin Only)
+        if (auth()->check() && auth()->user()->isAdmin() && $request->has('is_kd_muted')) {
+            \App\Models\BotSetting::set("kd_mute_{$kd}", $request->boolean('is_kd_muted') ? '1' : '0');
+        }
+
         $msg = "⏱️ Waktu jeda macul KD #{$kd} berhasil diatur menjadi {$cooldownHours} Jam sekali!";
 
         if ($request->ajax() || $request->wantsJson()) {
@@ -486,6 +498,31 @@ class GameAccountController extends Controller
                 'message' => $msg,
                 'kd_number' => (int) $kd,
                 'cooldown_hours' => $cooldownHours
+            ]);
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    // Fitur Matikan / Jeda Cooldown KD Tertentu (Mode Tidur KD) - Admin Only
+    public function togglePauseKdCd(Request $request, $kd)
+    {
+        self::checkAdminOrFail();
+
+        $current = (bool) \App\Models\BotSetting::get("kd_mute_{$kd}", false);
+        $newStatus = !$current;
+        \App\Models\BotSetting::set("kd_mute_{$kd}", $newStatus ? '1' : '0');
+
+        $user = auth()->user() ? auth()->user()->name : 'Admin';
+        $statusStr = $newStatus ? 'dimatikan (Mode Tidur)' : 'diaktifkan kembali';
+        $msg = "😴 Pengingat/CD KD #{$kd} berhasil {$statusStr} oleh Admin {$user}!";
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'is_muted' => $newStatus,
+                'message' => $msg,
+                'kd_number' => (int) $kd,
             ]);
         }
 

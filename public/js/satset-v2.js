@@ -932,6 +932,9 @@
             const inputToken = document.getElementById('inputFonnteToken');
             const inputPhone = document.getElementById('inputSettingWAPhone');
             const checkAuto = document.getElementById('checkAutoNotify');
+            const inputUnreplied = document.getElementById('inputSpamUnrepliedInterval');
+            const inputMaxWork = document.getElementById('inputMaxWorkMinutes');
+            const inputOverdue = document.getElementById('inputSpamOverdueInterval');
             const badgeStatus = document.getElementById('badgeDeviceStatus');
             const btnToggleEye = document.getElementById('btnToggleTokenVisibility');
             const btnSave = document.getElementById('btnSaveBotSettings');
@@ -939,6 +942,37 @@
             const btnTestConn = document.getElementById('btnTestDeviceConn');
             const inputWebhook = document.getElementById('inputWebhookUrl');
             const btnCopyWebhook = document.getElementById('btnCopyWebhookUrl');
+
+            function syncQuickBtns(selector, val) {
+                document.querySelectorAll(selector).forEach(b => {
+                    if (parseInt(b.dataset.val, 10) === parseInt(val, 10)) {
+                        b.classList.remove('btn-outline-secondary');
+                        b.classList.add('active', 'btn-outline-primary', 'fw-bold');
+                    } else {
+                        b.classList.remove('active', 'btn-outline-primary', 'fw-bold');
+                        b.classList.add('btn-outline-secondary');
+                    }
+                });
+            }
+
+            // Quick button click listeners
+            document.addEventListener('click', function(e) {
+                const bUnreplied = e.target.closest('.btn-quick-unreplied');
+                if (bUnreplied && inputUnreplied) {
+                    inputUnreplied.value = bUnreplied.dataset.val;
+                    syncQuickBtns('.btn-quick-unreplied', bUnreplied.dataset.val);
+                }
+                const bMaxWork = e.target.closest('.btn-quick-maxwork');
+                if (bMaxWork && inputMaxWork) {
+                    inputMaxWork.value = bMaxWork.dataset.val;
+                    syncQuickBtns('.btn-quick-maxwork', bMaxWork.dataset.val);
+                }
+                const bOverdue = e.target.closest('.btn-quick-overdue');
+                if (bOverdue && inputOverdue) {
+                    inputOverdue.value = bOverdue.dataset.val;
+                    syncQuickBtns('.btn-quick-overdue', bOverdue.dataset.val);
+                }
+            });
 
             if (btnCopyWebhook && inputWebhook) {
                 btnCopyWebhook.addEventListener('click', function () {
@@ -970,6 +1004,19 @@
                         if (inputPhone) inputPhone.value = data.target_phone || '';
                         if (checkAuto) checkAuto.checked = !!data.is_auto_notify;
                         if (inputWebhook && data.webhook_url) inputWebhook.value = data.webhook_url;
+
+                        if (inputUnreplied && data.spam_unreplied_interval) {
+                            inputUnreplied.value = data.spam_unreplied_interval;
+                            syncQuickBtns('.btn-quick-unreplied', data.spam_unreplied_interval);
+                        }
+                        if (inputMaxWork && data.max_work_minutes) {
+                            inputMaxWork.value = data.max_work_minutes;
+                            syncQuickBtns('.btn-quick-maxwork', data.max_work_minutes);
+                        }
+                        if (inputOverdue && data.spam_overdue_interval) {
+                            inputOverdue.value = data.spam_overdue_interval;
+                            syncQuickBtns('.btn-quick-overdue', data.spam_overdue_interval);
+                        }
 
                         if (data.target_phone) {
                             localStorage.setItem('rok_wa_phone', data.target_phone);
@@ -1028,6 +1075,9 @@
                     const tokenVal = inputToken ? inputToken.value.trim() : '';
                     const phoneVal = inputPhone ? inputPhone.value.trim() : '';
                     const isAutoVal = checkAuto ? checkAuto.checked : true;
+                    const unrepliedVal = inputUnreplied ? parseInt(inputUnreplied.value, 10) : 15;
+                    const maxWorkVal = inputMaxWork ? parseInt(inputMaxWork.value, 10) : 30;
+                    const overdueVal = inputOverdue ? parseInt(inputOverdue.value, 10) : 5;
 
                     btnSave.disabled = true;
                     btnSave.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
@@ -1043,7 +1093,10 @@
                             body: JSON.stringify({
                                 fonnte_token: tokenVal,
                                 target_phone: phoneVal,
-                                is_auto_notify: isAutoVal
+                                is_auto_notify: isAutoVal,
+                                spam_unreplied_interval: unrepliedVal,
+                                max_work_minutes: maxWorkVal,
+                                spam_overdue_interval: overdueVal
                             })
                         });
                         const data = await res.json();
@@ -1191,7 +1244,13 @@
         }
 
         // F. Auto-Notify Heartbeat (Otomatis kirim saat tab terbuka & KD selesai jeda tanpa klik apapun)
+        // - Interval 60 detik (server guard 2 menit cegah duplikat dari multiple tab)
+        // - Pause otomatis saat tab tersembunyi (hemat kuota Fonnte)
+        // - Langsung cek ulang saat tab aktif kembali setelah >= 8 menit tidak aktif
         async function runAutoNotifyHeartbeat() {
+            // Jangan kirim saat tab sedang tersembunyi/minimize
+            if (document.visibilityState === 'hidden') return;
+
             try {
                 const res = await fetch('/bot/check-auto-notify', {
                     method: 'POST',
@@ -1204,8 +1263,8 @@
                 const data = await res.json();
                 if (data.success && data.notified_count > 0) {
                     data.notified_kds.forEach(item => {
-                        if (item.type === 'spam_10m_unreplied') {
-                            showSatsetToast(`⚠️ <b>[Bot WA Fonnte]</b> Spam 10 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (${item.ready_count} char) karena belum dibalas!`, 'warning');
+                        if (item.type === 'spam_10m_unreplied' || item.type === 'spam_5m_unreplied') {
+                            showSatsetToast(`⚠️ <b>[Bot WA Fonnte]</b> Spam 5 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (${item.ready_count} char) karena belum dibalas!`, 'warning');
                         } else if (item.type === 'spam_5m_overdue') {
                             showSatsetToast(`🔥 <b>[Bot WA Fonnte]</b> Spam Overdue 5 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (> 30m belum diceklis)!`, 'danger');
                         } else {
@@ -1254,9 +1313,25 @@
             }
         });
 
-        // Jalankan pengecekan heartbeat pertama kali setelah 5 detik, lalu tiap 25 detik
+        // Jalankan pengecekan heartbeat:
+        // - Pertama: 5 detik setelah halaman terbuka
+        // - Selanjutnya: tiap 60 detik (server guard 2 menit cegah duplikat)
         setTimeout(runAutoNotifyHeartbeat, 5000);
-        setInterval(runAutoNotifyHeartbeat, 25000);
+        setInterval(runAutoNotifyHeartbeat, 60000);
+
+        // Cek ulang segera saat tab aktif kembali setelah >= 8 menit tersembunyi
+        let tabHiddenAt = null;
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden') {
+                tabHiddenAt = Date.now();
+            } else if (document.visibilityState === 'visible') {
+                const hiddenMs = tabHiddenAt ? (Date.now() - tabHiddenAt) : 0;
+                if (hiddenMs >= 8 * 60 * 1000) {
+                    runAutoNotifyHeartbeat();
+                }
+                tabHiddenAt = null;
+            }
+        });
 
         // Ekspor fungsi trigger heartbeat langsung saat timer 00:00
         window.SatsetTriggerHeartbeat = runAutoNotifyHeartbeat;

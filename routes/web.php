@@ -132,11 +132,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/jadwal/kd/{kd}/set-cooldown', [GameAccountController::class, 'setKdCooldown']);
     Route::post('/jadwal/kd/{kd}/force-ready', [GameAccountController::class, 'forceReadyKd']);
     Route::post('/jadwal/kd/{kd}/extend-cooldown', [GameAccountController::class, 'extendKdCooldown']);
+    Route::post('/jadwal/kd/{kd}/toggle-pause-cd', [GameAccountController::class, 'togglePauseKdCd']);
     Route::post('/akun/char/{id}/extend-cooldown', [GameAccountController::class, 'extendCharCooldown']);
 
     // Fitur Bot WhatsApp Otomatis (Fonnte API Gateway)
     Route::get('/bot/settings', [BotNotificationController::class, 'getSettings']);
     Route::post('/bot/settings', [BotNotificationController::class, 'saveSettings']);
+    Route::post('/bot/toggle-auto-notify', [BotNotificationController::class, 'toggleAutoNotify']);
     Route::post('/bot/test-connection', [BotNotificationController::class, 'testConnection']);
     Route::post('/bot/get-groups', [BotNotificationController::class, 'getGroups']);
     Route::post('/bot/test-send', [BotNotificationController::class, 'testSend']);

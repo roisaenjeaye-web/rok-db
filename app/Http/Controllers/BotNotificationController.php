@@ -12,6 +12,17 @@ use Illuminate\Support\Facades\Log;
 class BotNotificationController extends Controller
 {
     // Ambil setting bot
+    /**
+     * Guard: pastikan yang akses adalah admin
+     */
+    private function requireAdmin(): void
+    {
+        if (!auth()->check() || !auth()->user()->isAdmin()) {
+            abort(403, '❌ Akses ditolak! Fitur ini hanya untuk Admin.');
+        }
+    }
+
+    // Ambil setting bot
     public function getSettings()
     {
         return response()->json([
@@ -19,17 +30,52 @@ class BotNotificationController extends Controller
             'fonnte_token' => BotSetting::get('fonnte_token', ''),
             'target_phone' => BotSetting::get('target_phone', ''),
             'is_auto_notify' => (bool) BotSetting::get('is_auto_notify', true),
+            'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 15),
+            'max_work_minutes' => (int) BotSetting::get('max_work_minutes', 30),
+            'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 5),
             'webhook_url' => $this->getWebhookUrl(),
+            'is_admin' => auth()->check() && auth()->user()->isAdmin(),
         ]);
     }
 
-    // Simpan setting bot
+    // Toggle Cepat Matikan / Aktifkan Bot CD (Mode Tidur) - Admin Only
+    public function toggleAutoNotify(Request $request)
+    {
+        $this->requireAdmin();
+
+        $current = (bool) BotSetting::get('is_auto_notify', true);
+        $newStatus = !$current;
+        BotSetting::set('is_auto_notify', $newStatus ? '1' : '0');
+
+        $adminName = auth()->user()->name ?? 'Admin';
+        $statusText = $newStatus ? 'DIAKTIFKAN KEMBALI' : 'DINONAKTIFKAN (Mode Tidur)';
+        $msg = $newStatus
+            ? "🔔 Bot Pengingat CD berhasil diaktifkan kembali oleh Admin {$adminName}!"
+            : "😴 Bot Pengingat CD dimatikan (Mode Tidur) oleh Admin {$adminName}! Pengingat & spam dinonaktifkan.";
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'is_auto_notify' => $newStatus,
+                'message' => $msg,
+            ]);
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    // Simpan setting bot (Admin Only)
     public function saveSettings(Request $request)
     {
+        $this->requireAdmin();
+
         $request->validate([
             'fonnte_token' => 'nullable|string',
             'target_phone' => 'nullable|string',
             'is_auto_notify' => 'nullable|boolean',
+            'spam_unreplied_interval' => 'nullable|integer|min:1|max:1440',
+            'max_work_minutes' => 'nullable|integer|min:1|max:1440',
+            'spam_overdue_interval' => 'nullable|integer|min:1|max:1440',
         ]);
 
         if ($request->has('fonnte_token')) {
@@ -44,6 +90,18 @@ class BotNotificationController extends Controller
             BotSetting::set('is_auto_notify', $request->boolean('is_auto_notify') ? '1' : '0');
         }
 
+        if ($request->has('spam_unreplied_interval')) {
+            BotSetting::set('spam_unreplied_interval', (int) $request->input('spam_unreplied_interval'));
+        }
+
+        if ($request->has('max_work_minutes')) {
+            BotSetting::set('max_work_minutes', (int) $request->input('max_work_minutes'));
+        }
+
+        if ($request->has('spam_overdue_interval')) {
+            BotSetting::set('spam_overdue_interval', (int) $request->input('spam_overdue_interval'));
+        }
+
         return response()->json([
             'success' => true,
             'message' => 'Pengaturan Bot WhatsApp Fonnte berhasil disimpan!',
@@ -51,6 +109,9 @@ class BotNotificationController extends Controller
                 'fonnte_token' => BotSetting::get('fonnte_token', ''),
                 'target_phone' => BotSetting::get('target_phone', ''),
                 'is_auto_notify' => (bool) BotSetting::get('is_auto_notify', true),
+                'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 15),
+                'max_work_minutes' => (int) BotSetting::get('max_work_minutes', 30),
+                'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 5),
                 'webhook_url' => $this->getWebhookUrl(),
             ]
         ]);
@@ -173,22 +234,25 @@ class BotNotificationController extends Controller
         $kingdom->replied_by = $worker;
         $kingdom->save();
 
+        $maxWorkMinutes = (int) BotSetting::get('max_work_minutes', 30);
+        $spamOverdueInterval = (int) BotSetting::get('spam_overdue_interval', 5);
+
         $targetPhone = BotSetting::get('target_phone');
         if (!empty($targetPhone)) {
             $msg = "👍 *INFO: KD #{$kd} SEDANG DIKERJAKAN!* 🎯\n";
             $msg .= "━━━━━━━━━━━━━━━━━\n";
             $msg .= "👤 *Operator:* {$worker} (via Web Dashboard)\n";
-            $msg .= "⏱️ *Tenggat Waktu:* 30 Menit dari sekarang\n";
+            $msg .= "⏱️ *Tenggat Waktu:* {$maxWorkMinutes} Menit dari sekarang\n";
             $msg .= "━━━━━━━━━━━━━━━━━\n";
             $msg .= "🔗 *Buka Dashboard:* " . $this->getDashboardUrl() . "\n";
-            $msg .= "_Spam pengingat 5 menit dijeda. Selesaikan panen sebelum spam overdue aktif!_ 🌾🚜";
+            $msg .= "_Spam pengingat dijeda {$maxWorkMinutes} menit. Selesaikan panen sebelum spam overdue aktif!_ 🌾🚜";
 
             FonnteService::sendMessage($targetPhone, $msg);
         }
 
         return response()->json([
             'success' => true,
-            'message' => "KD #{$kd} berhasil ditandai sedang dikerjakan oleh {$worker}! Tenggat 30 menit dimulai.",
+            'message' => "KD #{$kd} berhasil ditandai sedang dikerjakan oleh {$worker}! Tenggat {$maxWorkMinutes} menit dimulai.",
             'replied_at' => $kingdom->replied_at->toIso8601String(),
             'replied_by' => $kingdom->replied_by,
         ]);
@@ -294,15 +358,18 @@ class BotNotificationController extends Controller
 
         // Jika ada KD yang diakui balasan, kirim balasan otomatis ke grup
         if (!empty($acknowledgedKds)) {
+            $maxWorkMinutes = (int) BotSetting::get('max_work_minutes', 30);
+            $spamOverdueInterval = (int) BotSetting::get('spam_overdue_interval', 5);
+
             $kdListStr = implode(', ', array_map(fn($item) => "KD #{$item['kd']}", $acknowledgedKds));
             $replyMsg = "👍 *BALASAN DITERIMA DARI {$name}!* 🎯\n";
             $replyMsg .= "━━━━━━━━━━━━━━━━━\n";
             $replyMsg .= "🏰 *Target:* {$kdListStr}\n";
             $replyMsg .= "⏳ *Status:* Ditandai sedang dikerjakan!\n";
-            $replyMsg .= "⏱️ *Tenggat Waktu:* 30 Menit dari sekarang.\n";
+            $replyMsg .= "⏱️ *Tenggat Waktu:* {$maxWorkMinutes} Menit dari sekarang.\n";
             $replyMsg .= "━━━━━━━━━━━━━━━━━\n";
             $replyMsg .= "🔗 *Buka & Ceklis di Web:* " . $this->getDashboardUrl() . "\n";
-            $replyMsg .= "_Jika dalam 30 menit belum selesai/diceklis di web, bot akan spam tiap 5 menit. Semangat macul!_ 🌾🚜";
+            $replyMsg .= "_Jika dalam {$maxWorkMinutes} menit belum selesai/diceklis di web, bot akan spam tiap {$spamOverdueInterval} menit. Semangat macul!_ 🌾🚜";
 
             $phoneToSend = $targetPhone ?: $sender;
             FonnteService::sendMessage($phoneToSend, $replyMsg);
@@ -352,9 +419,19 @@ class BotNotificationController extends Controller
         $groupedByKD = Character::with('gameAccount')->get()->groupBy('kd_number')->sortKeys();
         $kingdoms = Kingdom::all()->keyBy('kd_number');
 
+        $spamUnrepliedInterval = (int) BotSetting::get('spam_unreplied_interval', 15);
+        $maxWorkMinutes        = (int) BotSetting::get('max_work_minutes', 30);
+        $spamOverdueInterval   = (int) BotSetting::get('spam_overdue_interval', 5);
+
         $notifiedKds = [];
 
         foreach ($groupedByKD as $kd => $kChars) {
+            // Cek apakah KD ini secara spesifik dimatikan/dijeda oleh admin (Mode Tidur KD)
+            $isKdMuted = (bool) BotSetting::get("kd_mute_{$kd}", false);
+            if ($isKdMuted) {
+                continue;
+            }
+
             $kingdom = $kingdoms->get($kd);
             $cooldownHours = $kingdom ? (float) $kingdom->cooldown_hours : 4.0;
             $cooldownMinutes = (int) round($cooldownHours * 60);
@@ -423,7 +500,7 @@ class BotNotificationController extends Controller
 
             // KASUS 1: Belum dibalas (replied_at == null)
             // last_notified null -> notif awal SEGERA
-            // last_notified ada dan >= 4 menit -> spam 5 menit (dengan buffer cron)
+            // last_notified ada dan >= ($spamUnrepliedInterval - 1) menit -> spam unreplied
             if ($repliedAt === null) {
                 $shouldSend = false;
                 $isSpam     = false;
@@ -434,14 +511,14 @@ class BotNotificationController extends Controller
                     $isSpam     = false;
                 } else {
                     $minsElapsed = (int) now()->diffInMinutes($lastNotified, true);
-                    if ($minsElapsed >= 4) {
+                    if ($minsElapsed >= max(1, $spamUnrepliedInterval - 1)) {
                         $shouldSend = true;
                         $isSpam     = true;
                     }
                 }
 
                 if ($shouldSend) {
-                    $msg = self::buildReadyOrSpam5Text($kd, $readyCount, $kChars->count(), $cooldownHours, $kingdom, $isSpam, $worker);
+                    $msg = self::buildReadyOrSpam5Text($kd, $readyCount, $kChars->count(), $cooldownHours, $kingdom, $isSpam, $worker, $spamUnrepliedInterval);
                     $res = FonnteService::sendMessage($phone, $msg, $token);
 
                     if ($res['success']) {
@@ -452,25 +529,25 @@ class BotNotificationController extends Controller
                         $notifiedKds[] = [
                             'kd'             => $kd,
                             'ready_count'    => $readyCount,
-                            'type'           => $isSpam ? 'spam_5m_unreplied' : 'initial_ready',
+                            'type'           => $isSpam ? "spam_{$spamUnrepliedInterval}m_unreplied" : 'initial_ready',
                             'reminder_count' => $kingdom->reminder_count,
                         ];
                     }
                 }
             }
             // KASUS 2: Sudah dibalas (replied_at != null)
-            // Diberi jeda 30 menit. Lewat 30 menit dan >= 5 menit sejak notif terakhir -> spam 5 menit
+            // Diberi jeda $maxWorkMinutes. Lewat $maxWorkMinutes dan >= $spamOverdueInterval menit sejak notif terakhir -> spam
             else {
                 $minsSinceReply = (int) now()->diffInMinutes($repliedAt, true);
 
-                if ($minsSinceReply >= 30) {
+                if ($minsSinceReply >= $maxWorkMinutes) {
                     $diffSinceLastNotif = $lastNotified
                         ? (int) now()->diffInMinutes($lastNotified, true)
                         : 999;
 
-                    // Spam tiap 5 menit selama belum dikelarin
-                    if ($diffSinceLastNotif >= 5) {
-                        $msg = self::buildOverdueSpam5Text($kd, $readyCount, $kChars->count(), $cooldownHours, $kingdom, $minsSinceReply);
+                    // Spam tiap $spamOverdueInterval menit selama belum dikelarin
+                    if ($diffSinceLastNotif >= max(1, $spamOverdueInterval - 1)) {
+                        $msg = self::buildOverdueSpam5Text($kd, $readyCount, $kChars->count(), $cooldownHours, $kingdom, $minsSinceReply, $maxWorkMinutes, $spamOverdueInterval);
                         $res = FonnteService::sendMessage($phone, $msg, $token);
 
                         if ($res['success']) {
@@ -481,13 +558,13 @@ class BotNotificationController extends Controller
                             $notifiedKds[] = [
                                 'kd'             => $kd,
                                 'ready_count'    => $readyCount,
-                                'type'           => 'spam_5m_overdue',
+                                'type'           => "spam_{$spamOverdueInterval}m_overdue",
                                 'reminder_count' => $kingdom->reminder_count,
                             ];
                         }
                     }
                 }
-                // Sudah dibalas tapi belum 30 menit: diam, tidak spam
+                // Sudah dibalas tapi belum lewat $maxWorkMinutes: diam, tidak spam
             }
         }
 
@@ -499,14 +576,14 @@ class BotNotificationController extends Controller
         ];
     }
 
-    // Format pesan: Notif Siap Panen Pertama atau Spam 5 Menit jika belum dibalas
-    protected static function buildReadyOrSpam5Text($kd, $readyCount, $totalChars, $cooldownHours, $kingdom, $isSpam, $worker)
+    // Format pesan: Notif Siap Panen Pertama atau Spam jika belum dibalas
+    protected static function buildReadyOrSpam5Text($kd, $readyCount, $totalChars, $cooldownHours, $kingdom, $isSpam, $worker, $spamInterval = 15)
     {
         $currentUrl = self::resolveDashboardUrl();
         $cdStr = ((float)$cooldownHours == (int)$cooldownHours) ? (int)$cooldownHours : $cooldownHours;
 
         if ($isSpam) {
-            $minsSinceReady = $kingdom->ready_since ? abs((int) round(now()->diffInMinutes($kingdom->ready_since))) : 5;
+            $minsSinceReady = $kingdom->ready_since ? abs((int) round(now()->diffInMinutes($kingdom->ready_since))) : $spamInterval;
             $count = ($kingdom->reminder_count ?? 0) + 1;
 
             $text = "⚠️ *SPAM PENGINGAT #{$count} (BELUM ADA BALASAN)* ⚠️\n";
@@ -519,7 +596,7 @@ class BotNotificationController extends Controller
             $text .= "@all\n";
             $text .= "━━━━━━━━━━━━━━━━━\n";
             $text .= "🔗 *Buka Dashboard:* {$currentUrl}\n";
-            $text .= "💬 _Ketik balasan di WA (contoh: 'otw' / 'siap') untuk mematikan spam 5 menit ini!_ ⏰";
+            $text .= "💬 _Ketik balasan di WA (contoh: 'otw' / 'siap') untuk mematikan spam {$spamInterval} menit ini!_ ⏰";
         } else {
             $text = "🚨 *PANGGILAN PANEN FARM RoK (AUTO BOT)* 🚨\n";
             $text .= "━━━━━━━━━━━━━━━━━\n";
@@ -530,14 +607,14 @@ class BotNotificationController extends Controller
             $text .= "@all\n";
             $text .= "━━━━━━━━━━━━━━━━━\n";
             $text .= "🔗 *Buka Dashboard:* {$currentUrl}\n";
-            $text .= "💬 _Balas chat ini di grup (misal: 'otw') agar bot tidak spam tiap 5 menit!_ 🌾🚜";
+            $text .= "💬 _Balas chat ini di grup (misal: 'otw') agar bot tidak spam tiap {$spamInterval} menit!_ 🌾🚜";
         }
 
         return $text;
     }
 
-    // Format pesan: Spam Overdue Tiap 5 Menit (Sudah dibalas tapi > 30 menit belum diceklis selesai)
-    protected static function buildOverdueSpam5Text($kd, $readyCount, $totalChars, $cooldownHours, $kingdom, $minsSinceReply)
+    // Format pesan: Spam Overdue (Sudah dibalas tapi > maxWorkMinutes belum diceklis selesai)
+    protected static function buildOverdueSpam5Text($kd, $readyCount, $totalChars, $cooldownHours, $kingdom, $minsSinceReply, $maxWorkMinutes = 30, $spamOverdueInterval = 5)
     {
         $currentUrl = self::resolveDashboardUrl();
         $cdStr = ((float)$cooldownHours == (int)$cooldownHours) ? (int)$cooldownHours : $cooldownHours;
@@ -547,15 +624,15 @@ class BotNotificationController extends Controller
         $text = "🔥 *PERINGATAN URGENT: BELUM SELESAI DICEKLIS! #{$count}* 🔥\n";
         $text .= "━━━━━━━━━━━━━━━━━\n";
         $text .= "🏰 *Kingdom:* KD #{$kd}\n";
-        $text .= "⚠️ *Status:* OVERDUE (> 30 Menit)!\n";
+        $text .= "⚠️ *Status:* OVERDUE (> {$maxWorkMinutes} Menit)!\n";
         $text .= "👤 *Dibalas Oleh:* {$repliedBy} ({$minsSinceReply} menit lalu)\n";
-        $text .= "🚨 *Keterangan:* Sudah di-reply 30 menit lalu tapi *BELUM DIKELARIN / DICEKLIS* di web!\n";
+        $text .= "🚨 *Keterangan:* Sudah di-reply {$maxWorkMinutes} menit lalu tapi *BELUM DIKELARIN / DICEKLIS* di web!\n";
         $text .= "👥 *Sisa Char Belum Panen:* {$readyCount} Char\n";
         $text .= "⏱️ *Siklus:* Tiap {$cdStr} Jam\n";
         $text .= "@all\n";
         $text .= "━━━━━━━━━━━━━━━━━\n";
         $text .= "🔗 *Buka & Ceklis di Web:* {$currentUrl}\n";
-        $text .= "_Bot akan spam setiap 5 menit sampai KD ini dikelarin / diceklis selesai panen!_ 🌾🚜";
+        $text .= "_Bot akan spam setiap {$spamOverdueInterval} menit sampai KD ini dikelarin / diceklis selesai panen!_ 🌾🚜";
 
         return $text;
     }
@@ -565,6 +642,7 @@ class BotNotificationController extends Controller
     {
         $currentUrl = $this->getDashboardUrl();
         $cdStr = ((float)$cooldownHours == (int)$cooldownHours) ? (int)$cooldownHours : $cooldownHours;
+        $spamUnrepliedInterval = (int) BotSetting::get('spam_unreplied_interval', 15);
 
         if ($readyCount > 0 || !$maxCooldownEnd || now()->greaterThanOrEqualTo($maxCooldownEnd)) {
             $text = "🚨 *PANGGILAN PANEN FARM RoK (AUTO BOT)* 🚨\n";
@@ -576,7 +654,7 @@ class BotNotificationController extends Controller
             $text .= "@all\n";
             $text .= "━━━━━━━━━━━━━━━━━\n";
             $text .= "🔗 *Buka Dashboard:* {$currentUrl}\n";
-            $text .= "💬 _Balas chat ini di grup (misal: 'otw') agar bot tidak spam tiap 5 menit!_ 🌾🚜";
+            $text .= "💬 _Balas chat ini di grup (misal: 'otw') agar bot tidak spam tiap {$spamUnrepliedInterval} menit!_ 🌾🚜";
         } else {
             $sisaMenit = abs((int) round(now()->diffInMinutes($maxCooldownEnd)));
             $jam = floor($sisaMenit / 60);
