@@ -16,10 +16,10 @@ class CalculatorController extends Controller
     {
         $request->validate([
             'calc_mode' => 'nullable|in:deduct_tax,target_net',
-            'food' => 'nullable|numeric|min:0',
-            'wood' => 'nullable|numeric|min:0',
-            'stone' => 'nullable|numeric|min:0',
-            'gold' => 'nullable|numeric|min:0',
+            'food' => 'nullable|string|max:255',
+            'wood' => 'nullable|string|max:255',
+            'stone' => 'nullable|string|max:255',
+            'gold' => 'nullable|string|max:255',
             'tax' => 'required|numeric|min:0|max:99.9',
             'price_per_m' => 'nullable|numeric|min:0',
             'kd_number' => 'nullable|numeric|min:1',
@@ -33,11 +33,19 @@ class CalculatorController extends Controller
         $stockAction = $request->input('stock_action', 'add');
         $kdNumber = $request->filled('kd_number') ? (int) $request->input('kd_number') : null;
 
+        $rawInputs = [
+            'food' => (string) $request->input('food', ''),
+            'wood' => (string) $request->input('wood', ''),
+            'stone' => (string) $request->input('stone', ''),
+            'gold' => (string) $request->input('gold', ''),
+        ];
+
+        // Mendukung ekspresi matematika di dalam cell (contoh: 10+10+10 = 30)
         $inputs = [
-            'food' => (float) $request->input('food', 0),
-            'wood' => (float) $request->input('wood', 0),
-            'stone' => (float) $request->input('stone', 0),
-            'gold' => (float) $request->input('gold', 0),
+            'food' => $this->parseMathExpression($rawInputs['food']),
+            'wood' => $this->parseMathExpression($rawInputs['wood']),
+            'stone' => $this->parseMathExpression($rawInputs['stone']),
+            'gold' => $this->parseMathExpression($rawInputs['gold']),
         ];
 
         // Validasi: minimal ada salah satu nilai RSS
@@ -66,6 +74,7 @@ class CalculatorController extends Controller
             $priceSubtotal = round($net * $pricePerM, 0);
 
             $results[$key] = [
+                'raw' => $rawInputs[$key],
                 'input' => $amount,
                 'gross' => $gross,
                 'tax' => $taxVal,
@@ -136,5 +145,52 @@ class CalculatorController extends Controller
             'total_price' => $totalPrice,
             'success' => $stockMessage,
         ]);
+    }
+
+    /**
+     * Parse ekspresi matematika di dalam cell secara aman (contoh: "10+10+10" -> 30, "15.5 + 20" -> 35.5)
+     */
+    private function parseMathExpression(?string $str): float
+    {
+        if ($str === null || trim($str) === '') {
+            return 0.0;
+        }
+
+        if (is_numeric($str)) {
+            return max(0.0, (float) $str);
+        }
+
+        $clean = trim($str);
+        // Hapus tanda = di awal jika ada
+        $clean = ltrim($clean, '= ');
+        // Normalisasi koma menjadi titik
+        $clean = str_replace(',', '.', $clean);
+        // Izinkan hanya angka, titik, spasi, dan operator matematika
+        $clean = preg_replace('/[^0-9\+\-\*\/\.\(\)\s]/', '', $clean);
+        // Hapus trailing operator jika masih menggantung di ujung
+        $clean = preg_replace('/[\+\-\*\/]+$/', '', trim($clean));
+
+        if (empty($clean) || !preg_match('/^[\d\.\s\+\-\*\/\(\)]+$/', $clean)) {
+            return 0.0;
+        }
+
+        try {
+            $result = @eval('return ' . $clean . ';');
+            if (is_numeric($result)) {
+                return (float) max(0, $result);
+            }
+        } catch (\Throwable $e) {
+            // Fallback manual penambahan jika eval gagal
+            $parts = explode('+', $clean);
+            $sum = 0.0;
+            foreach ($parts as $p) {
+                if (is_numeric(trim($p))) {
+                    $sum += (float) trim($p);
+                }
+            }
+            return max(0.0, $sum);
+        }
+
+        return 0.0;
     }
 }

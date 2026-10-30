@@ -622,13 +622,42 @@
         applyFilters();
     }
 
+    // Helper parse nilai / rumus matematika RSS cell (contoh: "10+10+10" -> 30)
+    function parseRssMath(val) {
+        if (!val) return 0;
+        if (typeof val === 'number') return val;
+        let str = String(val).trim().replace(/^=\s*/, '').replace(/,/g, '.');
+        str = str.replace(/[^0-9+\-*/.()]/g, '');
+        if (!str) return 0;
+        str = str.replace(/[+\-*/]+$/, '').trim();
+        if (!str) return 0;
+        try {
+            const evaluated = Function('"use strict"; return (' + str + ')')();
+            return (typeof evaluated === 'number' && isFinite(evaluated)) ? Math.max(0, evaluated) : 0;
+        } catch (e) {
+            const parts = str.split('+');
+            let sum = 0;
+            for (const p of parts) {
+                const n = parseFloat(p.trim());
+                if (!isNaN(n)) sum += n;
+            }
+            return Math.max(0, sum);
+        }
+    }
+    window.parseRssMath = parseRssMath;
+
     // 4. Salin Format Pesanan WhatsApp Profesional (1-Click)
     window.copyWhatsAppFormat = function () {
         const kd = document.getElementById('input_kd') ? document.getElementById('input_kd').value.trim() : '';
-        const food = parseFloat(document.getElementById('input_food') ? document.getElementById('input_food').value : 0) || 0;
-        const wood = parseFloat(document.getElementById('input_wood') ? document.getElementById('input_wood').value : 0) || 0;
-        const stone = parseFloat(document.getElementById('input_stone') ? document.getElementById('input_stone').value : 0) || 0;
-        const gold = parseFloat(document.getElementById('input_gold') ? document.getElementById('input_gold').value : 0) || 0;
+        const foodRaw = document.getElementById('input_food') ? document.getElementById('input_food').value : '';
+        const woodRaw = document.getElementById('input_wood') ? document.getElementById('input_wood').value : '';
+        const stoneRaw = document.getElementById('input_stone') ? document.getElementById('input_stone').value : '';
+        const goldRaw = document.getElementById('input_gold') ? document.getElementById('input_gold').value : '';
+
+        const food = parseRssMath(foodRaw);
+        const wood = parseRssMath(woodRaw);
+        const stone = parseRssMath(stoneRaw);
+        const gold = parseRssMath(goldRaw);
         const tax = parseFloat(document.getElementById('input_tax') ? document.getElementById('input_tax').value : 0) || 8;
         const pricePerM = parseFloat(document.getElementById('input_price') ? document.getElementById('input_price').value : 0) || 0;
 
@@ -655,10 +684,22 @@
         const totalPrice = pricePerM > 0 ? Math.round(totalNet * pricePerM) : 0;
 
         let rssList = [];
-        if (food > 0) rssList.push(`  🌽 Food: ${food.toFixed(2)}M`);
-        if (wood > 0) rssList.push(`  🪵 Wood: ${wood.toFixed(2)}M`);
-        if (stone > 0) rssList.push(`  🪨 Stone: ${stone.toFixed(2)}M`);
-        if (gold > 0) rssList.push(`  🪙 Gold: ${gold.toFixed(2)}M`);
+        if (food > 0) {
+            const note = /[\+\-\*\/]/.test(foodRaw) ? ` _(${foodRaw.trim()})_` : '';
+            rssList.push(`  🌽 Food: ${food.toFixed(2)}M${note}`);
+        }
+        if (wood > 0) {
+            const note = /[\+\-\*\/]/.test(woodRaw) ? ` _(${woodRaw.trim()})_` : '';
+            rssList.push(`  🪵 Wood: ${wood.toFixed(2)}M${note}`);
+        }
+        if (stone > 0) {
+            const note = /[\+\-\*\/]/.test(stoneRaw) ? ` _(${stoneRaw.trim()})_` : '';
+            rssList.push(`  🪨 Stone: ${stone.toFixed(2)}M${note}`);
+        }
+        if (gold > 0) {
+            const note = /[\+\-\*\/]/.test(goldRaw) ? ` _(${goldRaw.trim()})_` : '';
+            rssList.push(`  🪙 Gold: ${gold.toFixed(2)}M${note}`);
+        }
 
         let text = `👑 *DETAIL PESANAN RSS RoK* 👑\n`;
         text += `-----------------------------------\n`;

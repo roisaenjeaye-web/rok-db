@@ -133,39 +133,44 @@
 
                         <!-- 2. Input RSS ke bawah (F, W, S, G) -->
                         <div class="mb-3">
-                            <label class="form-label text-muted small fw-bold d-flex justify-content-between align-items-center">
-                                <span id="label_rss_input">INPUT JUMLAH RSS (M)</span>
-                                <span class="badge bg-light text-muted border">Bisa isi salah satu / semua</span>
-                            </label>
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <label class="form-label text-muted small fw-bold m-0" id="label_rss_input">INPUT JUMLAH RSS (M)</label>
+                                <span class="badge bg-primary-subtle text-primary border border-primary-subtle" style="font-size: 11px;">
+                                    <i class="bi bi-calculator me-1"></i>Bisa hitung di cell (misal: <code>10+10+10</code>)
+                                </span>
+                            </div>
 
                             <div class="d-flex flex-column gap-2">
                                 <!-- Food -->
                                 <div class="input-group">
                                     <span class="input-group-text bg-light fw-bold" style="width: 105px;">🌽 Food</span>
-                                    <input type="number" step="0.01" class="form-control rss-input" name="food" id="input_food" placeholder="0" value="{{ old('food', session('results.food.input', '')) }}" oninput="calculateRealtime()">
-                                    <span class="input-group-text">M</span>
+                                    <input type="text" inputmode="text" autocomplete="off" class="form-control rss-input font-monospace fw-bold" name="food" id="input_food" placeholder="0 (contoh: 10+10+10)" value="{{ old('food', session('results.food.raw', session('results.food.input', ''))) }}" oninput="calculateRealtime()" onkeydown="handleEnterCalculate(event, this)">
+                                    <span class="input-group-text bg-light fw-bold rss-badge-preview" id="badge_preview_food" onclick="applyEvaluatedValue('food')" title="Klik untuk menerapkan hasil kalkulasi ke cell" style="cursor: pointer; min-width: 48px; justify-content: center;">M</span>
                                 </div>
 
                                 <!-- Wood -->
                                 <div class="input-group">
                                     <span class="input-group-text bg-light fw-bold" style="width: 105px;">🪵 Wood</span>
-                                    <input type="number" step="0.01" class="form-control rss-input" name="wood" id="input_wood" placeholder="0" value="{{ old('wood', session('results.wood.input', '')) }}" oninput="calculateRealtime()">
-                                    <span class="input-group-text">M</span>
+                                    <input type="text" inputmode="text" autocomplete="off" class="form-control rss-input font-monospace fw-bold" name="wood" id="input_wood" placeholder="0 (contoh: 10+10+10)" value="{{ old('wood', session('results.wood.raw', session('results.wood.input', ''))) }}" oninput="calculateRealtime()" onkeydown="handleEnterCalculate(event, this)">
+                                    <span class="input-group-text bg-light fw-bold rss-badge-preview" id="badge_preview_wood" onclick="applyEvaluatedValue('wood')" title="Klik untuk menerapkan hasil kalkulasi ke cell" style="cursor: pointer; min-width: 48px; justify-content: center;">M</span>
                                 </div>
 
                                 <!-- Stone -->
                                 <div class="input-group">
                                     <span class="input-group-text bg-light fw-bold" style="width: 105px;">🪨 Stone</span>
-                                    <input type="number" step="0.01" class="form-control rss-input" name="stone" id="input_stone" placeholder="0" value="{{ old('stone', session('results.stone.input', '')) }}" oninput="calculateRealtime()">
-                                    <span class="input-group-text">M</span>
+                                    <input type="text" inputmode="text" autocomplete="off" class="form-control rss-input font-monospace fw-bold" name="stone" id="input_stone" placeholder="0 (contoh: 10+10+10)" value="{{ old('stone', session('results.stone.raw', session('results.stone.input', ''))) }}" oninput="calculateRealtime()" onkeydown="handleEnterCalculate(event, this)">
+                                    <span class="input-group-text bg-light fw-bold rss-badge-preview" id="badge_preview_stone" onclick="applyEvaluatedValue('stone')" title="Klik untuk menerapkan hasil kalkulasi ke cell" style="cursor: pointer; min-width: 48px; justify-content: center;">M</span>
                                 </div>
 
                                 <!-- Gold -->
                                 <div class="input-group">
                                     <span class="input-group-text bg-light fw-bold" style="width: 105px;">🪙 Gold</span>
-                                    <input type="number" step="0.01" class="form-control rss-input" name="gold" id="input_gold" placeholder="0" value="{{ old('gold', session('results.gold.input', '')) }}" oninput="calculateRealtime()">
-                                    <span class="input-group-text">M</span>
+                                    <input type="text" inputmode="text" autocomplete="off" class="form-control rss-input font-monospace fw-bold" name="gold" id="input_gold" placeholder="0 (contoh: 10+10+10)" value="{{ old('gold', session('results.gold.raw', session('results.gold.input', ''))) }}" oninput="calculateRealtime()" onkeydown="handleEnterCalculate(event, this)">
+                                    <span class="input-group-text bg-light fw-bold rss-badge-preview" id="badge_preview_gold" onclick="applyEvaluatedValue('gold')" title="Klik untuk menerapkan hasil kalkulasi ke cell" style="cursor: pointer; min-width: 48px; justify-content: center;">M</span>
                                 </div>
+                            </div>
+                            <div class="form-text small text-muted mt-1" style="font-size: 11px;">
+                                💡 <i>Ketik rumus/penjumlahan langsung di kotak cell (misal <code>10+10+10</code>). Sistem otomatis menghitung totalnya <b>30M</b> sebelum dipotong pajak! Tekan <b>Enter</b> untuk otomatis menyederhanakan cell jadi angka total.</i>
                             </div>
                         </div>
 
@@ -340,11 +345,22 @@
 
                                 @foreach($resNames as $key => $meta)
                                     @php
-                                        $row = session("results.{$key}", ['input' => 0, 'gross' => 0, 'tax' => 0, 'net' => 0, 'subtotal_price' => 0]);
+                                        $row = session("results.{$key}", ['input' => 0, 'gross' => 0, 'tax' => 0, 'net' => 0, 'subtotal_price' => 0, 'raw' => '']);
+                                        $rawStr = (string) ($row['raw'] ?? '');
+                                        $hasFormula = !empty($rawStr) && preg_match('/[\+\-\*\/]/', $rawStr);
                                     @endphp
                                     <tr id="tr_{{ $key }}">
                                         <td class="fw-bold">{{ $meta['icon'] }} {{ $meta['name'] }}</td>
-                                        <td class="text-end" id="td_{{ $key }}_input">{{ $row['input'] > 0 ? $row['input'].'M' : '-' }}</td>
+                                        <td class="text-end" id="td_{{ $key }}_input">
+                                            @if($row['input'] > 0)
+                                                <span>{{ $row['input'] }}M</span>
+                                                @if($hasFormula)
+                                                    <div class="text-muted small" style="font-size: 11px;">({{ $rawStr }})</div>
+                                                @endif
+                                            @else
+                                                -
+                                            @endif
+                                        </td>
                                         <td class="text-end text-danger" id="td_{{ $key }}_tax">{{ $row['tax'] > 0 ? $row['tax'].'M' : '-' }}</td>
                                         <td class="text-end fw-bold text-success" id="td_{{ $key }}_net">{{ $row['net'] > 0 ? $row['net'].'M' : '-' }}</td>
                                         <td class="text-end" id="td_{{ $key }}_price">{{ $row['subtotal_price'] > 0 ? 'Rp '.number_format($row['subtotal_price'], 0, ',', '.') : '-' }}</td>
@@ -443,6 +459,59 @@
         }
     }
 
+    // Helper fungsi aman parsing ekspresi matematika di cell RSS (contoh: 10+10+10 -> 30)
+    function parseMathExpression(val) {
+        if (!val) return 0;
+        if (typeof val === 'number') return val;
+        let str = String(val).trim().replace(/^=\s*/, '').replace(/,/g, '.');
+        str = str.replace(/[^0-9+\-*/.()]/g, '');
+        if (!str) return 0;
+        // Hapus operator di ujung jika user masih dalam proses mengetik
+        str = str.replace(/[+\-*/]+$/, '').trim();
+        if (!str) return 0;
+        try {
+            const evaluated = Function('"use strict"; return (' + str + ')')();
+            return (typeof evaluated === 'number' && isFinite(evaluated)) ? Math.max(0, evaluated) : 0;
+        } catch (e) {
+            const parts = str.split('+');
+            let sum = 0;
+            for (const p of parts) {
+                const n = parseFloat(p.trim());
+                if (!isNaN(n)) sum += n;
+            }
+            return Math.max(0, sum);
+        }
+    }
+
+    // Terapkan hasil evaluasi ekspresi ke input cell jika user klik badge preview
+    function applyEvaluatedValue(res) {
+        const inputEl = document.getElementById('input_' + res);
+        if (!inputEl) return;
+        const raw = (inputEl.value || '').trim();
+        if (/[\+\-\*\/]/.test(raw)) {
+            const val = parseMathExpression(raw);
+            if (val > 0) {
+                inputEl.value = Math.round(val * 100) / 100;
+                calculateRealtime();
+            }
+        }
+    }
+
+    // Tekan Enter di cell untuk langsung menyederhanakan ekspresi matematika jadi total
+    function handleEnterCalculate(event, inputEl) {
+        if (event.key === 'Enter') {
+            event.preventDefault();
+            const raw = (inputEl.value || '').trim();
+            if (/[\+\-\*\/]/.test(raw)) {
+                const val = parseMathExpression(raw);
+                if (val > 0) {
+                    inputEl.value = Math.round(val * 100) / 100;
+                }
+            }
+            calculateRealtime();
+        }
+    }
+
     // Kalkulasi Realtime di Browser saat user mengetik
     function calculateRealtime() {
         const isDeduct = document.getElementById('mode_deduct').checked;
@@ -460,8 +529,25 @@
 
         resources.forEach(res => {
             const inputEl = document.getElementById('input_' + res);
-            const val = parseFloat(inputEl.value) || 0;
+            const rawVal = inputEl ? (inputEl.value || '').trim() : '';
+            const hasFormula = /[\+\-\*\/]/.test(rawVal);
+            const val = parseMathExpression(rawVal);
             totalInput += val;
+
+            // Update badge preview di sebelah kanan input box
+            const badge = document.getElementById('badge_preview_' + res);
+            if (badge) {
+                if (hasFormula && val > 0) {
+                    const disp = (Math.round(val * 100) / 100);
+                    badge.innerText = '= ' + disp + 'M';
+                    badge.className = 'input-group-text bg-success text-white fw-bold rss-badge-preview shadow-sm';
+                    badge.title = 'Hasil: ' + disp + 'M (Klik atau tekan Enter untuk menyederhanakan)';
+                } else {
+                    badge.innerText = 'M';
+                    badge.className = 'input-group-text bg-light fw-bold rss-badge-preview';
+                    badge.title = 'Satuan Juta (M)';
+                }
+            }
 
             let gross = 0;
             let tax = 0;
@@ -491,7 +577,19 @@
             const tdNet = document.getElementById('td_' + res + '_net');
             const tdPrice = document.getElementById('td_' + res + '_price');
 
-            if (tdInput) tdInput.innerText = val > 0 ? (isDeduct ? gross.toFixed(2) : gross.toFixed(2)) + 'M' : '-';
+            if (tdInput) {
+                if (val > 0) {
+                    const disp = val.toFixed(2) + 'M';
+                    if (hasFormula) {
+                        const escapedRaw = rawVal.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                        tdInput.innerHTML = `<span>${disp}</span><div class="text-muted small" style="font-size: 11px;">(${escapedRaw})</div>`;
+                    } else {
+                        tdInput.innerText = disp;
+                    }
+                } else {
+                    tdInput.innerText = '-';
+                }
+            }
             if (tdTax) tdTax.innerText = tax > 0 ? tax.toFixed(2) + 'M' : '-';
             if (tdNet) tdNet.innerText = net > 0 ? net.toFixed(2) + 'M' : '-';
             if (tdPrice) tdPrice.innerText = subPrice > 0 ? 'Rp ' + Math.round(subPrice).toLocaleString('id-ID') : '-';
