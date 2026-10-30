@@ -620,6 +620,8 @@
                         </div>
                     </div>
                 </div>
+            </div>
+
             <!-- Modal Tambah Waktu Jeda Saat Ini (Kendala Lapangan / Molor) -->
             <div class="modal fade" id="modalExtendCdKD{{ $kd }}" tabindex="-1" aria-hidden="true">
                 <div class="modal-dialog modal-dialog-centered">
