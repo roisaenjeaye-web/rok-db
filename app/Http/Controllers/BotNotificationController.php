@@ -197,29 +197,48 @@ class BotNotificationController extends Controller
     // Webhook Fonnte untuk menerima balasan chat dari member grup atau nomor user
     public function handleWebhook(Request $request)
     {
-        Log::info('Fonnte Webhook Received: ' . json_encode($request->all()));
+        $payload = $request->all();
+        if (empty($payload) || empty($payload['sender'])) {
+            $raw = $request->getContent() ?: @file_get_contents('php://input');
+            if ($raw) {
+                $decoded = @json_decode($raw, true);
+                if (is_array($decoded)) {
+                    $payload = array_merge($decoded, $payload);
+                }
+            }
+        }
 
-        $sender = (string) $request->input('sender', '');
-        $member = (string) $request->input('member', '');
-        $name = (string) ($request->input('name') ?: 'Anggota Grup');
-        $message = trim((string) $request->input('message', ''));
-        $device = (string) $request->input('device', '');
+        Log::info('Fonnte Webhook Received: ' . json_encode($payload));
+
+        $sender = (string) ($payload['sender'] ?? $request->input('sender', ''));
+        $member = (string) ($payload['member'] ?? $request->input('member', ''));
+        $name = (string) ($payload['name'] ?? ($request->input('name') ?: 'Anggota Grup'));
+        $message = trim((string) ($payload['message'] ?? $request->input('message', '')));
+        $device = (string) ($payload['device'] ?? $request->input('device', ''));
+
+        // Bersihkan angka untuk deteksi nomor bot sendiri
+        $cleanDevice = preg_replace('/[^0-9]/', '', $device);
+        $cleanMember = preg_replace('/[^0-9]/', '', $member);
+        $cleanSender = preg_replace('/[^0-9]/', '', $sender);
 
         // Abaikan jika pesan dikirim oleh nomor bot sendiri (agar tidak looping self-reply)
-        if (($member && $member === $device) || ($sender && $sender === $device)) {
+        if (!empty($cleanDevice) && (($cleanMember && $cleanMember === $cleanDevice) || ($cleanSender && $cleanSender === $cleanDevice))) {
             return response()->json(['status' => true, 'message' => 'Abaikan pesan sendiri dari bot']);
         }
 
         $targetPhone = (string) BotSetting::get('target_phone', '');
         if (!empty($targetPhone)) {
-            $cleanTarget = str_replace(['@g.us', '@c.us', '@s.whatsapp.net'], '', $targetPhone);
-            $cleanSender = str_replace(['@g.us', '@c.us', '@s.whatsapp.net'], '', $sender);
-            $cleanMember = str_replace(['@g.us', '@c.us', '@s.whatsapp.net'], '', $member);
+            $cleanTarget = preg_replace('/[^0-9]/', '', $targetPhone);
 
             // Validasi apakah pesan berasal dari grup target atau member grup target
-            $isTargetGroup = ($cleanSender === $cleanTarget) || str_contains($targetPhone, $sender) || (!empty($cleanSender) && str_contains($sender, $cleanTarget));
-            $isTargetDirect = ($member && str_contains($targetPhone, $member)) || (!empty($cleanMember) && str_contains($cleanTarget, $cleanMember));
-            $isSenderDirect = ($sender === $targetPhone) || (!empty($cleanSender) && $cleanSender === $cleanTarget);
+            $isTargetGroup = ($cleanSender && $cleanTarget && $cleanSender === $cleanTarget)
+                || str_contains($targetPhone, $sender)
+                || (!empty($cleanSender) && str_contains($sender, $cleanTarget))
+                || (!empty($cleanTarget) && str_contains($cleanSender, $cleanTarget));
+            $isTargetDirect = ($member && str_contains($targetPhone, $member))
+                || (!empty($cleanMember) && !empty($cleanTarget) && str_contains($cleanTarget, $cleanMember));
+            $isSenderDirect = ($sender === $targetPhone)
+                || (!empty($cleanSender) && !empty($cleanTarget) && $cleanSender === $cleanTarget);
 
             if (!$isTargetGroup && !$isTargetDirect && !$isSenderDirect) {
                 return response()->json(['status' => true, 'message' => 'Pesan dari luar target diabaikan']);

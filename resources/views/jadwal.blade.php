@@ -261,9 +261,14 @@
                         
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <span class="text-muted small fw-bold"><i class="bi bi-stopwatch-fill text-warning"></i> JEDA TERLAMA</span>
-                            <span class="fw-bold fs-6 {{ $cooldownText ? 'text-warning' : 'text-success' }}" data-target-time="{{ $maxCooldownEnd ? $maxCooldownEnd->timestamp : 0 }}">
-                                {{ $cooldownText ? 'Tunggu ' . $cooldownText : 'Semua Siap!' }}
-                            </span>
+                            <div class="d-flex align-items-center gap-1">
+                                <span class="fw-bold fs-6 {{ $cooldownText ? 'text-warning' : 'text-success' }}" data-target-time="{{ $maxCooldownEnd ? $maxCooldownEnd->timestamp : 0 }}">
+                                    {{ $cooldownText ? 'Tunggu ' . $cooldownText : 'Semua Siap!' }}
+                                </span>
+                                <button type="button" class="btn btn-outline-info btn-xs py-0 px-2 fw-bold rounded-pill text-decoration-none shadow-xs" style="font-size: 11px;" data-bs-toggle="modal" data-bs-target="#modalExtendCdKD{{ $kd }}" title="Tambah jeda kendala molor (+CD)">
+                                    <i class="bi bi-clock-history"></i> +CD
+                                </button>
+                            </div>
                         </div>
 
                         <!-- REKAP LOG JOKI KD INI -->
@@ -356,6 +361,9 @@
                                             <span class="d-block small fw-normal text-white-50" style="font-size: 11px;">Tunggu {{ $cooldownText }} lagi</span>
                                         @endif
                                     </button>
+                                    <button type="button" class="btn btn-outline-info fw-bold px-2" data-bs-toggle="modal" data-bs-target="#modalExtendCdKD{{ $kd }}" title="Tambah waktu jeda saat ini jika ada kendala / molor (+CD)">
+                                        <i class="bi bi-plus-circle me-1"></i>+CD
+                                    </button>
                                     {{-- Tombol Get Ready: Force reset cooldown semua char di KD ini --}}
                                     <form action="/jadwal/kd/{{ $kd }}/force-ready" method="POST" class="m-0 form-force-ready">
                                         @csrf
@@ -425,6 +433,9 @@
                                                         <span class="badge bg-secondary" style="font-size: 10px;">
                                                             <i class="bi bi-clock"></i> {{ $charCooldownText }}
                                                         </span>
+                                                        <button type="button" class="btn btn-xs btn-outline-info rounded-pill px-2 py-0 fw-bold" style="font-size: 10px;" data-bs-toggle="modal" data-bs-target="#modalExtendCdChar{{ $char->id }}" title="Tambah waktu jeda char ini (+CD)">
+                                                            +CD
+                                                        </button>
                                                         <form action="/akun/char/{{ $char->id }}/force-ready" method="POST" class="d-inline m-0 form-force-ready">
                                                             @csrf
                                                             <button type="submit" class="btn btn-xs btn-warning rounded-pill px-2 py-0 fw-bold" style="font-size: 10px;" title="Reset jeda char ini jadi Siap Panen sekarang!">
@@ -440,6 +451,42 @@
                                                         </button>
                                                     </form>
                                                 @endif
+                                            </div>
+                                        </div>
+
+                                        <!-- Modal Extend CD Single Char -->
+                                        <div class="modal fade" id="modalExtendCdChar{{ $char->id }}" tabindex="-1" aria-hidden="true">
+                                            <div class="modal-dialog modal-dialog-centered modal-sm">
+                                                <div class="modal-content border-0 shadow">
+                                                    <form action="/akun/char/{{ $char->id }}/extend-cooldown" method="POST" class="form-extend-cd">
+                                                        @csrf
+                                                        <div class="modal-header bg-info text-white py-2">
+                                                            <h6 class="modal-title fw-bold" style="font-size: 13px;">
+                                                                <i class="bi bi-clock-history me-1"></i> +Jeda: {{ $char->ign }}
+                                                            </h6>
+                                                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                        </div>
+                                                        <div class="modal-body p-3">
+                                                            <p class="text-muted small mb-2" style="font-size: 11px;">
+                                                                Tambah waktu jeda khusus char ini (hanya untuk siklus ini):
+                                                            </p>
+                                                            <div class="input-group input-group-sm mb-2">
+                                                                <input type="number" name="minutes" class="form-control text-center fw-bold" value="60" required min="1" max="1440">
+                                                                <span class="input-group-text">Menit</span>
+                                                            </div>
+                                                            <div class="d-flex gap-1 flex-wrap mb-2">
+                                                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-minute" data-val="30">+30m</button>
+                                                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-minute" data-val="60">+60m</button>
+                                                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-minute" data-val="80">+80m</button>
+                                                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-minute" data-val="120">+2j</button>
+                                                            </div>
+                                                        </div>
+                                                        <div class="modal-footer bg-light p-2">
+                                                            <button type="button" class="btn btn-secondary btn-xs" data-bs-dismiss="modal">Batal</button>
+                                                            <button type="submit" class="btn btn-info text-white btn-xs fw-bold">Tambah Jeda</button>
+                                                        </div>
+                                                    </form>
+                                                </div>
                                             </div>
                                         </div>
                                     @endforeach
@@ -538,6 +585,66 @@
                                 </button>
                             </form>
                         </div>
+                    </div>
+                </div>
+            <!-- Modal Tambah Waktu Jeda Saat Ini (Kendala Lapangan / Molor) -->
+            <div class="modal fade" id="modalExtendCdKD{{ $kd }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow">
+                        <form action="/jadwal/kd/{{ $kd }}/extend-cooldown" method="POST" class="form-extend-cd">
+                            @csrf
+                            <div class="modal-header bg-info text-white py-2">
+                                <h6 class="modal-title fw-bold">
+                                    <i class="bi bi-clock-history me-1"></i> Tambah Waktu Jeda: KD #{{ $kd }}
+                                </h6>
+                                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body p-3">
+                                <div class="alert alert-info py-2 px-3 small mb-3 border-0 bg-info bg-opacity-10 text-dark">
+                                    <i class="bi bi-info-circle-fill text-info me-1"></i>
+                                    Gunakan ini jika panen mengalami kendala/molor. Waktu jeda yang sedang berjalan akan <b>ditambah</b> dan <b>hanya berlaku untuk siklus saat ini saja</b>. Setelah panen berikutnya, siklus akan otomatis normal kembali ({{ $kdCooldownHours }} Jam).
+                                </div>
+
+                                <div class="d-flex justify-content-between align-items-center mb-3 p-2 bg-light rounded border">
+                                    <div>
+                                        <span class="text-muted small">Status / Sisa Waktu Sekarang:</span>
+                                        <div class="fw-bold fs-6 text-dark">{{ $cooldownText ? 'Tunggu ' . $cooldownText : 'Semua Siap Panen' }}</div>
+                                    </div>
+                                    <div class="text-end">
+                                        <span class="text-muted small">Siklus Standar:</span>
+                                        <div class="fw-bold text-primary">{{ $kdCooldownHours }} Jam</div>
+                                    </div>
+                                </div>
+
+                                <!-- Tombol Cepat Menit -->
+                                <label class="form-label small fw-bold text-muted mb-1">PILIH CEPAT TAMBAHAN WAKTU:</label>
+                                <div class="d-flex gap-1 flex-wrap mb-3">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 btn-quick-minute" data-val="15">+15 Menit</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 btn-quick-minute" data-val="30">+30 Menit</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 btn-quick-minute" data-val="60">+60 Menit (1j)</button>
+                                    <button type="button" class="btn btn-sm btn-outline-primary active fw-bold rounded-pill px-3 btn-quick-minute" data-val="80">+80 Menit</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 btn-quick-minute" data-val="90">+90 Menit (1.5j)</button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-3 btn-quick-minute" data-val="120">+120 Menit (2j)</button>
+                                </div>
+
+                                <div class="mb-2">
+                                    <label class="form-label small fw-bold text-muted">ATAU KETIK JUMLAH MENIT:</label>
+                                    <div class="input-group">
+                                        <input type="number" name="minutes" class="form-control fw-bold fs-5 text-center text-info" value="80" required min="1" max="1440" placeholder="80">
+                                        <span class="input-group-text fw-bold">Menit</span>
+                                    </div>
+                                    <div class="form-text small mt-1" style="font-size: 11px;">
+                                        💡 <i>Contoh: Sisa waktu 1.2 jam (~72m) ditambah 80 menit menjadi total ~152 menit.</i>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer bg-light p-2 d-flex justify-content-between">
+                                <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Batal</button>
+                                <button type="submit" class="btn btn-info text-white btn-sm fw-bold px-3">
+                                    <i class="bi bi-plus-circle me-1"></i> Terapkan Tambahan Jeda
+                                </button>
+                            </div>
+                        </form>
                     </div>
                 </div>
             </div>
@@ -921,7 +1028,69 @@
         });
     });
 
-    // 4. Restore scroll position after reload (satset UX)
+    // 4. Handler Cepat Menit & AJAX Submit untuk Tambah Waktu Jeda (+CD)
+    document.addEventListener('click', function(e) {
+        const quickBtn = e.target.closest('.btn-quick-minute');
+        if (!quickBtn) return;
+        const modal = quickBtn.closest('.modal');
+        if (!modal) return;
+        const inputMinutes = modal.querySelector('input[name="minutes"]');
+        if (inputMinutes) {
+            inputMinutes.value = quickBtn.dataset.val;
+            modal.querySelectorAll('.btn-quick-minute').forEach(b => {
+                b.classList.remove('active', 'btn-outline-primary', 'fw-bold');
+                b.classList.add('btn-outline-secondary');
+            });
+            quickBtn.classList.remove('btn-outline-secondary');
+            quickBtn.classList.add('active', 'btn-outline-primary', 'fw-bold');
+        }
+    });
+
+    document.querySelectorAll('form.form-extend-cd').forEach(form => {
+        form.addEventListener('submit', async function(e) {
+            if (form.dataset.submitting === 'true') {
+                e.preventDefault();
+                return;
+            }
+            form.dataset.submitting = 'true';
+
+            e.preventDefault();
+            const btn = form.querySelector('button[type="submit"]');
+            const originalHtml = btn ? btn.innerHTML : '';
+            if (btn) {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="bi bi-hourglass-split me-1"></i>Menyimpan...';
+            }
+
+            try {
+                const formData = new FormData(form);
+                const response = await fetch(form.getAttribute('action'), {
+                    method: 'POST',
+                    body: formData,
+                    headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' }
+                });
+                const data = await response.json();
+                if (response.ok && data.success) {
+                    sessionStorage.setItem('satset_scroll_pos', window.scrollY);
+                    const toast = document.createElement('div');
+                    toast.className = 'alert alert-info alert-dismissible position-fixed shadow-lg border-0 fw-bold';
+                    toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 320px; font-size: 13px;';
+                    toast.innerHTML = `<i class="bi bi-clock-history me-2"></i>${data.message}<button type="button" class="btn-close" onclick="this.parentElement.remove()"></button>`;
+                    document.body.appendChild(toast);
+                    setTimeout(() => { window.location.reload(); }, 600);
+                } else {
+                    form.dataset.submitting = 'false';
+                    alert(data.message || 'Gagal menambah waktu jeda');
+                    if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
+                }
+            } catch (err) {
+                form.dataset.submitting = 'false';
+                form.submit();
+            }
+        });
+    });
+
+    // 5. Restore scroll position after reload (satset UX)
     const savedScroll = sessionStorage.getItem('satset_scroll_pos');
     if (savedScroll) {
         window.scrollTo(0, parseInt(savedScroll, 10));

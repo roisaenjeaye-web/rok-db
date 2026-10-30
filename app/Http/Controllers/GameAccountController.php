@@ -799,6 +799,96 @@ class GameAccountController extends Controller
         return back()->with('success', $msg);
     }
 
+    // Fitur Tambah Waktu Cooldown KD Saat Ini (Kendala Lapangan / Molor)
+    public function extendKdCooldown(Request $request, $kd)
+    {
+        $request->validate([
+            'minutes' => 'required|numeric|min:1|max:1440',
+        ]);
+
+        $minutes = (int) $request->input('minutes');
+        $charsCount = Character::where('kd_number', $kd)->count();
+
+        if ($charsCount === 0) {
+            $msg = "Tidak ada karakter di KD #{$kd}.";
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json(['success' => false, 'message' => $msg], 404);
+            }
+            return back()->with('error', $msg);
+        }
+
+        $kingdom = Kingdom::where('kd_number', $kd)->first();
+        $cdHours = $kingdom ? (float)$kingdom->cooldown_hours : 4.0;
+        $cdMinutes = (int) round($cdHours * 60);
+
+        DB::transaction(function () use ($kd, $minutes, $cdMinutes, $kingdom) {
+            // Karakter yang sedang cooldown (last_farmed_at NOT NULL): majukan last_farmed_at
+            DB::statement("UPDATE characters SET last_farmed_at = DATE_ADD(last_farmed_at, INTERVAL ? MINUTE) WHERE kd_number = ? AND last_farmed_at IS NOT NULL", [$minutes, $kd]);
+
+            // Karakter yang siap panen (last_farmed_at IS NULL): beri cooldown sebesar $minutes
+            DB::statement("UPDATE characters SET last_farmed_at = DATE_ADD(DATE_SUB(NOW(), INTERVAL ? MINUTE), INTERVAL ? MINUTE) WHERE kd_number = ? AND last_farmed_at IS NULL", [$cdMinutes, $minutes, $kd]);
+
+            // Reset status pengingat bot untuk siklus ini
+            if ($kingdom) {
+                $kingdom->replied_at = null;
+                $kingdom->replied_by = null;
+                $kingdom->ready_since = null;
+                $kingdom->reminder_count = 0;
+                $kingdom->save();
+            }
+        });
+
+        $user = auth()->user() ? auth()->user()->name : 'Operator';
+        $msg = "⏱️ Cooldown KD #{$kd} berhasil ditambah {$minutes} Menit oleh {$user}! Hanya berlaku untuk siklus ini.";
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'kd_number' => (int) $kd,
+                'added_minutes' => $minutes,
+            ]);
+        }
+
+        return back()->with('success', $msg);
+    }
+
+    // Fitur Tambah Waktu Cooldown Char Tunggal Saat Ini
+    public function extendCharCooldown(Request $request, $id)
+    {
+        $request->validate([
+            'minutes' => 'required|numeric|min:1|max:1440',
+        ]);
+
+        $minutes = (int) $request->input('minutes');
+        $char = Character::findOrFail($id);
+
+        $kingdom = Kingdom::where('kd_number', $char->kd_number)->first();
+        $cdHours = $kingdom ? (float)$kingdom->cooldown_hours : 4.0;
+        $cdMinutes = (int) round($cdHours * 60);
+
+        if ($char->last_farmed_at !== null) {
+            $char->last_farmed_at = $char->last_farmed_at->copy()->addMinutes($minutes);
+        } else {
+            $char->last_farmed_at = now()->subMinutes($cdMinutes)->addMinutes($minutes);
+        }
+        $char->save();
+
+        $user = auth()->user() ? auth()->user()->name : 'Operator';
+        $msg = "⏱️ Cooldown char {$char->ign} berhasil ditambah {$minutes} Menit oleh {$user}!";
+
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'message' => $msg,
+                'char_id' => $char->id,
+                'added_minutes' => $minutes,
+            ]);
+        }
+
+        return back()->with('success', $msg);
+    }
+
     // Atur Gaji Joki (Admin Only - via KingdomController, tapi guard bisa dipakai dari sini juga)
     public static function checkAdminOrFail()
     {
