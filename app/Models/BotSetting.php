@@ -11,19 +11,63 @@ class BotSetting extends Model
 
     protected $fillable = ['key', 'value'];
 
+    /**
+     * In-memory cache for all settings to prevent N+1 queries.
+     *
+     * @var array<string, mixed>|null
+     */
+    protected static ?array $memo = null;
+
+    protected static function booted(): void
+    {
+        static::saved(function () {
+            static::$memo = null;
+        });
+
+        static::deleted(function () {
+            static::$memo = null;
+        });
+    }
+
+    /**
+     * Warm up all settings into memory with a single query.
+     */
+    public static function warm(): void
+    {
+        if (static::$memo === null) {
+            try {
+                static::$memo = static::pluck('value', 'key')->all();
+            } catch (\Throwable $e) {
+                static::$memo = [];
+            }
+        }
+    }
+
+    /**
+     * Clear in-memory cache.
+     */
+    public static function clearCache(): void
+    {
+        static::$memo = null;
+    }
+
     public static function get(string $key, $default = null)
     {
-        $setting = static::where('key', $key)->first();
-        return $setting !== null ? $setting->value : $default;
+        static::warm();
+
+        if (array_key_exists($key, static::$memo)) {
+            return static::$memo[$key];
+        }
+
+        return $default;
     }
 
     public static function getBoolean(string $key, bool $default = false): bool
     {
-        $setting = static::where('key', $key)->first();
-        if ($setting === null) {
+        $val = static::get($key, null);
+        if ($val === null) {
             return $default;
         }
-        $val = $setting->value;
         if (is_bool($val)) {
             return $val;
         }
@@ -43,5 +87,9 @@ class BotSetting extends Model
             ['key' => $key],
             ['value' => $value]
         );
+
+        if (static::$memo !== null) {
+            static::$memo[$key] = $value;
+        }
     }
 }

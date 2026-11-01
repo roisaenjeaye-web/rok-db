@@ -339,9 +339,20 @@ class GameAccountController extends Controller
     // Menampilkan Jadwal Farm KD (Minimalist View)
     public function jadwal()
     {
-        // Pastikan semua KD yang ada di karakter terdaftar di tabel kingdoms
-        $charKds = Character::distinct()->pluck('kd_number')->toArray();
-        $existingKds = Kingdom::pluck('kd_number')->toArray();
+        // 1. Warm in-memory cache BotSetting (1 query instan untuk seluruh setting)
+        \App\Models\BotSetting::warm();
+
+        // 2. Query characters & gameAccount (Eager loaded)
+        $characters = Character::with('gameAccount')->get();
+        $groupedByKD = $characters->groupBy('kd_number')->sortKeys();
+
+        // 3. Query kingdoms sekali saja (di-key by kd_number)
+        $kingdoms = Kingdom::all()->keyBy('kd_number');
+
+        // 4. Pastikan semua KD yang ada di karakter terdaftar di tabel kingdoms
+        // (Dihitung langsung dari data collection di RAM, 0 query tambahan!)
+        $charKds = $characters->pluck('kd_number')->unique()->filter()->values()->toArray();
+        $existingKds = $kingdoms->keys()->toArray();
         $missingKds = array_diff($charKds, $existingKds);
         if (!empty($missingKds)) {
             $now = now();
@@ -359,15 +370,13 @@ class GameAccountController extends Controller
                 ];
             }
             Kingdom::insert($insertRows);
+            $kingdoms = Kingdom::all()->keyBy('kd_number');
         }
 
-        $characters = Character::with('gameAccount')->get();
-        $groupedByKD = $characters->groupBy('kd_number')->sortKeys();
         $adminNames = \App\Models\User::where('is_admin', true)->pluck('name')->toArray();
         $kdStats = KdFarmerStat::whereNotIn('worker_name', $adminNames)->get()->groupBy('kd_number');
         $knownWorkers = $this->getKnownWorkers();
         $activeWorker = $this->getActiveWorker(request());
-        $kingdoms = Kingdom::all()->keyBy('kd_number');
         $isAdmin = auth()->check() ? auth()->user()->isAdmin() : false;
         $isAutoNotify = \App\Models\BotSetting::getBoolean('is_auto_notify', true);
         $spamUnrepliedInterval = (int) \App\Models\BotSetting::get('spam_unreplied_interval', 15);
