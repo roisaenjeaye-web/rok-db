@@ -23,6 +23,7 @@
         .btn-xs { padding: 0.15rem 0.4rem; font-size: 0.75rem; line-height: 1.2; border-radius: 0.2rem; }
         .kd-card-wrapper { content-visibility: auto; contain-intrinsic-size: 0 450px; }
     </style>
+    <script src="https://instant.page/5.2.0" type="module" integrity="sha384-jnZyxPjiCGnKDdQRvtnynQt35ypydvQSTmbVYTu29Mtxu5VEVPvyFMDZTnQMrndN"></script>
 </head>
 <body>
 

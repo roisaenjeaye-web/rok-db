@@ -14,8 +14,9 @@ class KingdomController extends Controller
     public function index(Request $request)
     {
         // 1. OTOMATIS SINKRONISASI: Semua KD dari data Akun & Char langsung masuk ke Dashboard Stok
+        $kingdoms = Kingdom::orderBy('kd_number', 'asc')->get();
         $charKds = Character::distinct()->pluck('kd_number')->toArray();
-        $existingKds = Kingdom::pluck('kd_number')->toArray();
+        $existingKds = $kingdoms->pluck('kd_number')->toArray();
         $missingKds = array_diff($charKds, $existingKds);
         if (!empty($missingKds)) {
             $now = now();
@@ -33,9 +34,8 @@ class KingdomController extends Controller
                 ];
             }
             Kingdom::insert($insertRows);
+            $kingdoms = Kingdom::orderBy('kd_number', 'asc')->get();
         }
-
-        $kingdoms = Kingdom::orderBy('kd_number', 'asc')->get();
 
         // 2. Daftar operator joki (hanya dari User terdaftar di database yang bukan Admin)
         $adminNames = User::where('is_admin', true)->pluck('name')->toArray();

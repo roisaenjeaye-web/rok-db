@@ -21,6 +21,7 @@
         .card-header { background-color: #fff; border-bottom: 1px solid #edf2f9; font-weight: 600; border-radius: 10px 10px 0 0 !important; padding: 15px 20px; }
         .btn-xs { padding: 0.15rem 0.4rem; font-size: 0.75rem; line-height: 1.2; border-radius: 0.2rem; }
     </style>
+    <script src="https://instant.page/5.2.0" type="module" integrity="sha384-jnZyxPjiCGnKDdQRvtnynQt35ypydvQSTmbVYTu29Mtxu5VEVPvyFMDZTnQMrndN"></script>
 </head>
 <body>
 

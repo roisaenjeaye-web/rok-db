@@ -23,6 +23,7 @@
         .mode-card.active { border-color: #0d6efd; background-color: #eef4ff; }
         .form-check-input:checked { background-color: #0d6efd; border-color: #0d6efd; }
     </style>
+    <script src="https://instant.page/5.2.0" type="module" integrity="sha384-jnZyxPjiCGnKDdQRvtnynQt35ypydvQSTmbVYTu29Mtxu5VEVPvyFMDZTnQMrndN"></script>
 </head>
 <body>
 

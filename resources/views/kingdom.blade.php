@@ -20,6 +20,7 @@
         .card { border: none; border-radius: 10px; box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075); margin-bottom: 20px; }
         .card-header { background-color: #fff; border-bottom: 1px solid #edf2f9; font-weight: 600; border-radius: 10px 10px 0 0 !important; padding: 15px 20px; }
     </style>
+    <script src="https://instant.page/5.2.0" type="module" integrity="sha384-jnZyxPjiCGnKDdQRvtnynQt35ypydvQSTmbVYTu29Mtxu5VEVPvyFMDZTnQMrndN"></script>
 </head>
 <body>
 
