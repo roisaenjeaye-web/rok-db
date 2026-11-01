@@ -8,6 +8,13 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <link rel="stylesheet" href="/css/mobile.css">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <link rel="apple-touch-icon" href="/icon-192.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/icon-192.png">
     <style>
         body { background-color: #f4f6f9; font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
         .sidebar { min-height: 100vh; width: 250px; background-color: #212529; position: fixed; top: 0; left: 0; padding-top: 20px; box-shadow: 2px 0 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; z-index: 100; }
@@ -133,6 +140,17 @@
                 <button type="button" class="btn btn-sm btn-outline-success rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnShareAllWA" style="font-size: 12px;" title="Buka Chat WhatsApp Rekap">
                     <i class="bi bi-whatsapp fs-6"></i> <span>Manual WA</span>
                 </button>
+                <!-- Alarm Suara Web (Beep & TTS) -->
+                <button type="button" class="btn btn-sm btn-outline-warning rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnToggleAudioAlarm" title="Alarm Suara Web: Bunyi Beep & Bicara saat KD Siap Panen" style="font-size: 11px;">
+                    <i class="bi bi-volume-up-fill" id="iconAudioAlarm"></i> <span id="labelAudioAlarm">Alarm: ON</span>
+                </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 fw-bold shadow-xs" id="btnTestAudioAlarm" title="Tes Bunyi Alarm Suara Browser" style="font-size: 11px;">
+                    <i class="bi bi-play-circle me-1"></i>Tes
+                </button>
+                <!-- Tombol Install PWA -->
+                <button type="button" class="btn btn-sm btn-outline-primary rounded-pill px-2 py-1 fw-bold shadow-xs d-none" id="btnInstallPwa" title="Install RoK Joki ke Layar Utama (PWA)" style="font-size: 11px;">
+                    <i class="bi bi-phone me-1"></i>Install App
+                </button>
                 @if($isAdmin)
                 <button type="button" class="btn btn-sm btn-outline-secondary rounded-circle d-flex align-items-center justify-content-center p-0" style="width: 28px; height: 28px; font-size: 12px;" data-bs-toggle="modal" data-bs-target="#modalSettingWA" title="Pengaturan Bot WA Fonnte (Admin Only)">
                     <i class="bi bi-gear-fill"></i>
@@ -232,9 +250,30 @@
                     </div>
                     
                     <div class="card-body">
+                        @php
+                            $currentKd = isset($kingdoms[$kd]) ? $kingdoms[$kd] : null;
+                            $isKdLocked = $currentKd ? $currentKd->isLocked() : false;
+                            $lockedBy = $currentKd ? $currentKd->getActiveLockHolder() : null;
+                            $lockMinsLeft = $currentKd ? $currentKd->getLockMinutesLeft() : 0;
+                            $isLockedByMe = ($lockedBy === $activeWorker);
+                        @endphp
+
+                        {{-- Fitur Anti-Tabrakan Akun: Active Session Lock --}}
+                        @if($isKdLocked)
+                            <div class="alert alert-warning py-1 px-2 mb-2 d-flex justify-content-between align-items-center rounded-2 border-warning shadow-xs" style="font-size: 11px;">
+                                <span class="text-truncate me-1 text-dark">
+                                    <i class="bi bi-shield-lock-fill text-danger me-1"></i> <b>KUNCI AKTIF:</b> {{ $lockedBy }} (Sisa {{ $lockMinsLeft }}m)
+                                </span>
+                                @if($isLockedByMe || $isAdmin)
+                                    <button type="button" class="btn btn-xs btn-outline-danger rounded-pill px-2 py-0 fw-bold btn-toggle-lock" data-kd="{{ $kd }}" title="Buka Kunci KD ini">
+                                        <i class="bi bi-unlock"></i> Lepas
+                                    </button>
+                                @endif
+                            </div>
+                        @endif
+
                         @if($readyCount > 0)
                             @php
-                                $currentKd = isset($kingdoms[$kd]) ? $kingdoms[$kd] : null;
                                 $repliedAt = $currentKd ? $currentKd->replied_at : null;
                                 $minsSinceReply = $repliedAt ? abs((int) round(now()->diffInMinutes($repliedAt))) : null;
                             @endphp
@@ -401,10 +440,26 @@
                                 </div>
                             @endif
 
-                            <div class="d-flex gap-1">
+                            <div class="d-flex gap-1 flex-wrap">
                                 <button class="btn btn-sm btn-outline-secondary flex-grow-1" type="button" data-bs-toggle="collapse" data-bs-target="#collapseKD{{ $kd }}" aria-expanded="false">
-                                    <i class="bi bi-list-ul me-1"></i> Rincian Char ({{ $totalChars }})
+                                    <i class="bi bi-list-ul me-1"></i> Rincian ({{ $totalChars }})
                                 </button>
+                                <button type="button" class="btn btn-sm btn-outline-dark fw-bold px-2 py-1 d-flex align-items-center gap-1 shadow-xs" data-bs-toggle="modal" data-bs-target="#modalCredsKD{{ $kd }}" title="Data Akun & 1-Click Copy Sandi">
+                                    <i class="bi bi-key-fill text-warning"></i> <span style="font-size: 11px;">Akun</span>
+                                </button>
+                                @if(!$isKdLocked)
+                                    <button type="button" class="btn btn-sm btn-outline-primary fw-bold btn-toggle-lock px-2 py-1 d-flex align-items-center gap-1 shadow-xs" data-kd="{{ $kd }}" title="Kunci KD #{{ $kd }} (Saya sedang macul)">
+                                        <i class="bi bi-shield-lock"></i> <span style="font-size: 11px;">Kunci</span>
+                                    </button>
+                                @elseif($isLockedByMe || $isAdmin)
+                                    <button type="button" class="btn btn-sm btn-warning text-dark fw-bold btn-toggle-lock px-2 py-1 d-flex align-items-center gap-1 shadow-xs" data-kd="{{ $kd }}" title="Lepas Kunci KD #{{ $kd }}">
+                                        <i class="bi bi-unlock-fill"></i> <span style="font-size: 11px;">Lepas</span>
+                                    </button>
+                                @else
+                                    <button type="button" class="btn btn-sm btn-secondary fw-bold px-2 py-1 d-flex align-items-center gap-1" disabled title="Sedang dikerjakan oleh {{ $lockedBy }}">
+                                        <i class="bi bi-lock-fill"></i> <span style="font-size: 11px;">{{ Str::limit($lockedBy, 7) }}</span>
+                                    </button>
+                                @endif
                                 <button type="button" class="btn btn-sm btn-success fw-bold btn-bot-notify-kd px-2 py-1 d-flex align-items-center gap-1 shadow-xs"
                                     data-kd="{{ $kd }}"
                                     title="Kirim Otomatis via Bot Fonnte (Tanpa Buka WhatsApp)">
@@ -444,7 +499,21 @@
                                             <div>
                                                 <strong>{{ $char->ign }}</strong>
                                                 <div class="text-muted" style="font-size: 11px;">
-                                                    {{ $char->gameAccount->email ?? '-' }} | Farm: <span class="text-primary fw-bold">{{ $char->farm_count }}x</span>
+                                                    @if($char->gameAccount)
+                                                        <span class="text-dark">{{ $char->gameAccount->email }}</span>
+                                                        <button type="button" class="btn btn-xs btn-link p-0 text-decoration-none btn-copy-cred" data-copy="{{ $char->gameAccount->email }}" title="Salin Email">
+                                                            <i class="bi bi-clipboard text-primary"></i>
+                                                        </button>
+                                                        @if($char->gameAccount->password)
+                                                            <span class="ms-1 text-secondary">|</span>
+                                                            <button type="button" class="btn btn-xs btn-link p-0 text-decoration-none btn-copy-cred ms-1 text-warning fw-bold" data-copy="{{ $char->gameAccount->password }}" title="Salin Sandi">
+                                                                <i class="bi bi-key-fill"></i> Sandi
+                                                            </button>
+                                                        @endif
+                                                    @else
+                                                        -
+                                                    @endif
+                                                    | Farm: <span class="text-primary fw-bold">{{ $char->farm_count }}x</span>
                                                     @if(!empty($char->farmer_stats))
                                                         <span class="text-secondary ms-1">
                                                             (@foreach($char->farmer_stats as $wName => $wCount)
@@ -690,6 +759,74 @@
                                 </button>
                             </div>
                         </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Modal Data Akun & Copy Credentials KD #{{ $kd }} (1-Click Copy) -->
+            <div class="modal fade" id="modalCredsKD{{ $kd }}" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-dialog-centered">
+                    <div class="modal-content border-0 shadow">
+                        <div class="modal-header bg-dark text-white py-2">
+                            <h6 class="modal-title fw-bold" style="font-size: 14px;">
+                                <i class="bi bi-key-fill text-warning me-2"></i> Data Akun & Sandi KD #{{ $kd }}
+                            </h6>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body p-3">
+                            <p class="text-muted small mb-3" style="font-size: 12px;">
+                                <i class="bi bi-lightning-charge-fill text-warning"></i> Klik tombol <b>Salin</b> untuk copy email / password langsung ke clipboard tanpa repot ketik di game!
+                            </p>
+                            @php
+                                $accGroups = $chars->groupBy('game_account_id');
+                            @endphp
+                            <div class="d-flex flex-column gap-3">
+                                @forelse($accGroups as $accId => $cList)
+                                    @php $acc = $cList->first()->gameAccount; @endphp
+                                    <div class="card border p-3 bg-light rounded-3 shadow-xs">
+                                        <div class="d-flex justify-content-between align-items-center mb-2 flex-wrap gap-1">
+                                            <span class="fw-bold text-dark text-truncate" style="font-size: 13px;">
+                                                <i class="bi bi-envelope-at-fill text-primary me-1"></i> {{ $acc ? $acc->email : 'Tanpa Email' }}
+                                            </span>
+                                            @if($acc)
+                                                <button type="button" class="btn btn-sm btn-outline-primary py-0 px-2 btn-copy-cred" data-copy="{{ $acc->email }}" title="Salin Email">
+                                                    <i class="bi bi-clipboard me-1"></i> Salin Email
+                                                </button>
+                                            @endif
+                                        </div>
+
+                                        @if($acc && $acc->password)
+                                            <div class="d-flex justify-content-between align-items-center mb-2 bg-white p-2 rounded border flex-wrap gap-1">
+                                                <div class="text-truncate" style="font-size: 12px;">
+                                                    <span class="text-muted"><i class="bi bi-key-fill text-warning me-1"></i> Sandi:</span>
+                                                    <code class="text-dark fw-bold">{{ $acc->password }}</code>
+                                                </div>
+                                                <div class="d-flex gap-1">
+                                                    <button type="button" class="btn btn-xs btn-outline-warning text-dark py-0 px-2 btn-copy-cred" data-copy="{{ $acc->password }}" title="Salin Password">
+                                                        <i class="bi bi-clipboard-check me-1"></i> Salin Sandi
+                                                    </button>
+                                                    <button type="button" class="btn btn-xs btn-dark py-0 px-2 btn-copy-cred" data-copy="{{ $acc->email }}	{{ $acc->password }}" title="Salin Email + Sandi sekaligus">
+                                                        <i class="bi bi-files me-1"></i> Salin Dua-duanya
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        @endif
+
+                                        <div class="small text-muted mt-1" style="font-size: 11px;">
+                                            <i class="bi bi-person-badge me-1"></i> Karakter: 
+                                            @foreach($cList as $ch)
+                                                <span class="badge bg-white text-dark border me-1">{{ $ch->ign }}</span>
+                                            @endforeach
+                                        </div>
+                                    </div>
+                                @empty
+                                    <div class="text-center text-muted small py-3">Tidak ada akun terhubung di KD ini</div>
+                                @endforelse
+                            </div>
+                        </div>
+                        <div class="modal-footer bg-light p-2">
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Tutup</button>
+                        </div>
                     </div>
                 </div>
             </div>

@@ -11,7 +11,8 @@ class OrderController extends Controller
     public function index()
     {
         $orders = Order::orderBy('created_at', 'desc')->get();
-        return view('riwayat', compact('orders'));
+        $kingdoms = Kingdom::orderBy('kd_number')->get();
+        return view('riwayat', compact('orders', 'kingdoms'));
     }
 
     public function store(Request $request)

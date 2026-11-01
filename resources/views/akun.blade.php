@@ -8,6 +8,11 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css">
     <link rel="stylesheet" href="/css/mobile.css">
+    <link rel="manifest" href="/manifest.json">
+    <meta name="theme-color" content="#0d6efd">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <link rel="apple-touch-icon" href="/icon-192.png">
     <style>
         body { background-color: #f4f6f9; font-family: 'Segoe UI', sans-serif; overflow-x: hidden; }
         .sidebar { min-height: 100vh; width: 250px; background-color: #212529; position: fixed; top: 0; left: 0; padding-top: 20px; box-shadow: 2px 0 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; justify-content: space-between; z-index: 100; }
@@ -342,12 +347,17 @@
                                                         <div class="text-truncate me-1" style="font-size: 11px;">
                                                             <b class="text-dark"><i class="bi bi-envelope-fill text-primary me-1"></i> {{ $acc->email ?? 'Akun' }}</b>
                                                             @if($acc)
+                                                                <button type="button" class="btn btn-xs btn-link p-0 text-decoration-none btn-copy-cred ms-1" data-copy="{{ $acc->email }}" title="Salin Email">
+                                                                    <i class="bi bi-clipboard text-primary"></i>
+                                                                </button>
                                                                 <button type="button" class="btn btn-link text-primary p-0 ms-1" style="font-size: 11px; text-decoration: none;" data-bs-toggle="modal" data-bs-target="#modalEditAcc{{ $acc->id }}" title="Edit Akun Gmail">
                                                                     <i class="bi bi-pencil-square"></i>
                                                                 </button>
                                                             @endif
                                                             @if($acc && $acc->password)
-                                                                <span class="text-muted ms-1 small"><i class="bi bi-key"></i> {{ $acc->password }}</span>
+                                                                <button type="button" class="btn btn-xs btn-link p-0 text-decoration-none text-muted ms-1 small btn-copy-cred" data-copy="{{ $acc->password }}" title="Salin Sandi">
+                                                                    <i class="bi bi-key-fill text-warning"></i> {{ $acc->password }} <i class="bi bi-clipboard text-secondary" style="font-size: 9px;"></i>
+                                                                </button>
                                                             @endif
                                                             @if($acc && $acc->notes)
                                                                 <span class="badge bg-light text-secondary border fw-normal ms-1" style="font-size: 9px;">{{ $acc->notes }}</span>

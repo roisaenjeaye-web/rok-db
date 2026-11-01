@@ -450,6 +450,8 @@ class GameAccountController extends Controller
             $kingdom->ready_since = null;
             $kingdom->reminder_count = 0;
             $kingdom->last_notified_at = now();
+            $kingdom->locked_by = null;
+            $kingdom->locked_at = null;
             $kingdom->save();
 
             // Kirim notifikasi panen selesai ke grup WA jika bot aktif
@@ -944,6 +946,75 @@ class GameAccountController extends Controller
             ]);
         }
 
+        return back()->with('success', $msg);
+    }
+
+    // Fitur Kunci Sesi KD (Anti-Tabrakan Joki)
+    public function toggleLockKd(Request $request, $kd)
+    {
+        $worker = $this->getActiveWorker($request);
+        $isAdmin = auth()->check() ? auth()->user()->isAdmin() : false;
+
+        $kingdom = Kingdom::firstOrCreate(
+            ['kd_number' => $kd],
+            ['food' => 0, 'wood' => 0, 'stone' => 0, 'gold' => 0, 'cooldown_hours' => 4.0]
+        );
+
+        $isCurrentlyLocked = $kingdom->isLocked();
+        $currentLocker = $kingdom->getActiveLockHolder();
+
+        // 1. Jika KD sedang dikunci orang lain dan yang request bukan si pengunci dan bukan admin
+        if ($isCurrentlyLocked && $currentLocker !== $worker && !$isAdmin && !$request->boolean('force')) {
+            $minsAgo = $kingdom->locked_at ? (int) abs(now()->diffInMinutes($kingdom->locked_at)) : 0;
+            $msg = "⚠️ KD #{$kd} sedang dikerjakan oleh {$currentLocker} sejak {$minsAgo} menit yang lalu! Jangan tabrakan akun.";
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => false,
+                    'is_locked' => true,
+                    'locked_by' => $currentLocker,
+                    'message' => $msg,
+                ], 409);
+            }
+            return back()->with('error', $msg);
+        }
+
+        // 2. Jika saat ini sedang dikunci oleh worker ini (atau admin melepas kunci, atau request explicitly unlock): Buka Kunci
+        if ($isCurrentlyLocked && ($currentLocker === $worker || $isAdmin || $request->input('action') === 'unlock')) {
+            $kingdom->locked_by = null;
+            $kingdom->locked_at = null;
+            $kingdom->save();
+
+            $msg = "🔓 Kunci KD #{$kd} berhasil dilepas. Sekarang bebas dikerjakan siapa saja!";
+            if ($request->ajax() || $request->wantsJson()) {
+                return response()->json([
+                    'success' => true,
+                    'action' => 'unlocked',
+                    'is_locked' => false,
+                    'locked_by' => null,
+                    'kd_number' => (int) $kd,
+                    'message' => $msg,
+                ]);
+            }
+            return back()->with('success', $msg);
+        }
+
+        // 3. Kunci KD untuk worker ini (Lock)
+        $kingdom->locked_by = $worker;
+        $kingdom->locked_at = now();
+        $kingdom->save();
+
+        $msg = "🔒 KD #{$kd} berhasil Anda kunci (Operator: {$worker}). Joki lain akan melihat tanda bahwa Anda sedang macul!";
+        if ($request->ajax() || $request->wantsJson()) {
+            return response()->json([
+                'success' => true,
+                'action' => 'locked',
+                'is_locked' => true,
+                'locked_by' => $worker,
+                'locked_at' => $kingdom->locked_at->toIso8601String(),
+                'kd_number' => (int) $kd,
+                'message' => $msg,
+            ]);
+        }
         return back()->with('success', $msg);
     }
 

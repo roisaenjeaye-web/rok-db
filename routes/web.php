@@ -149,6 +149,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/jadwal/kd/{kd}/adjust-log', [GameAccountController::class, 'adjustKdLog']);
     Route::post('/jadwal/kd/{kd}/set-cooldown', [GameAccountController::class, 'setKdCooldown']);
     Route::post('/jadwal/kd/{kd}/force-ready', [GameAccountController::class, 'forceReadyKd']);
+    Route::post('/jadwal/kd/{kd}/toggle-lock', [GameAccountController::class, 'toggleLockKd']);
     Route::post('/jadwal/kd/{kd}/extend-cooldown', [GameAccountController::class, 'extendKdCooldown']);
     Route::post('/jadwal/kd/{kd}/toggle-pause-cd', [GameAccountController::class, 'togglePauseKdCd']);
     Route::post('/akun/char/{id}/extend-cooldown', [GameAccountController::class, 'extendCharCooldown']);

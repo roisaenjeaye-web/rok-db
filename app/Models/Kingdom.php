@@ -20,7 +20,9 @@ class Kingdom extends Model
         'food',
         'wood',
         'stone',
-        'gold'
+        'gold',
+        'locked_by',
+        'locked_at'
     ];
 
     protected $casts = [
@@ -29,5 +31,40 @@ class Kingdom extends Model
         'replied_at' => 'datetime',
         'ready_since' => 'datetime',
         'reminder_count' => 'integer',
+        'locked_at' => 'datetime',
     ];
+
+    /**
+     * Cek apakah KD sedang dikunci oleh operator (masa berlaku 30 menit)
+     */
+    public function isLocked(): bool
+    {
+        if (empty($this->locked_by) || !$this->locked_at) {
+            return false;
+        }
+
+        // Kunci otomatis kedaluwarsa setelah 30 menit
+        return $this->locked_at->greaterThan(now()->subMinutes(30));
+    }
+
+    /**
+     * Ambil nama operator yang mengunci jika masih aktif
+     */
+    public function getActiveLockHolder(): ?string
+    {
+        return $this->isLocked() ? $this->locked_by : null;
+    }
+
+    /**
+     * Sisa menit lock aktif
+     */
+    public function getLockMinutesLeft(): int
+    {
+        if (!$this->isLocked()) {
+            return 0;
+        }
+
+        $expiresAt = $this->locked_at->copy()->addMinutes(30);
+        return max(0, (int) round(now()->diffInMinutes($expiresAt, false)));
+    }
 }

@@ -26,6 +26,10 @@
         initKdFilters();
         initSatsetButtons();
         initWhatsAppReminders();
+        initAudioAlarmEngine();
+        init1ClickCopyEngine();
+        initActiveSessionLock();
+        initPwaInstallation();
     });
 
     // Inisialisasi Tampilan Mobile Responsif (HP-Friendly)
@@ -116,6 +120,14 @@
 
             document.body.appendChild(bottomNav);
         }
+    }
+
+    // Helper Escape HTML
+    function escapeHtml(str) {
+        if (!str) return '';
+        const div = document.createElement('div');
+        div.textContent = str;
+        return div.innerHTML;
     }
 
     // Helper Toast Notification (Non-intrusive)
@@ -445,12 +457,15 @@
                         }
                     }
 
-                    // Alert toast jika timer baru saja selesai di browser yang aktif
+                    // Alert toast & audio alarm jika timer baru saja selesai di browser yang aktif
                     if (el.dataset.wasCountdown === 'true' && !el.dataset.hasAlerted) {
                         el.dataset.hasAlerted = 'true';
                         const kd = cardWrapper ? cardWrapper.getAttribute('data-kd') : '';
                         if (kd) {
                             showSatsetToast(`🔔 <b>KD #${kd} SUDAH SIAP PANEN!</b> <button type="button" class="btn btn-xs btn-success rounded-pill ms-2 text-white fw-bold px-2" onclick="window.Satset.sendSingleKdWA('${kd}')"><i class="bi bi-whatsapp"></i> WA</button>`, 'success');
+                            if (window.triggerKdReadyAlarm) {
+                                window.triggerKdReadyAlarm(kd);
+                            }
                             if (window.SatsetTriggerHeartbeat) {
                                 window.SatsetTriggerHeartbeat();
                             }
@@ -1435,6 +1450,273 @@
 
         // Ekspor fungsi trigger heartbeat langsung saat timer 00:00
         window.SatsetTriggerHeartbeat = runAutoNotifyHeartbeat;
+    }
+
+    // ==========================================
+    // 7. Web Audio Alarm Engine (Beep + Speech)
+    // ==========================================
+    let webAudioCtx = null;
+
+    function getWebAudioContext() {
+        if (!webAudioCtx) {
+            const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+            if (AudioContextClass) {
+                webAudioCtx = new AudioContextClass();
+            }
+        }
+        if (webAudioCtx && webAudioCtx.state === 'suspended') {
+            webAudioCtx.resume();
+        }
+        return webAudioCtx;
+    }
+
+    function playChimeBeep() {
+        try {
+            const ctx = getWebAudioContext();
+            if (!ctx) return;
+
+            // 3-tone bright chime: C5 (523.25Hz), E5 (659.25Hz), G5 (783.99Hz)
+            const tones = [523.25, 659.25, 783.99];
+            tones.forEach((freq, idx) => {
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                const startTime = ctx.currentTime + idx * 0.16;
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(freq, startTime);
+
+                gain.gain.setValueAtTime(0, startTime);
+                gain.gain.linearRampToValueAtTime(0.35, startTime + 0.03);
+                gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.38);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start(startTime);
+                osc.stop(startTime + 0.42);
+            });
+        } catch (e) {
+            console.warn('[AudioAlarm] Error playing chime:', e);
+        }
+    }
+
+    function speakAlert(text) {
+        if ('speechSynthesis' in window) {
+            try {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'id-ID';
+                utterance.rate = 1.05;
+                utterance.pitch = 1.1;
+                utterance.volume = 1.0;
+                window.speechSynthesis.speak(utterance);
+            } catch (e) {
+                console.warn('[AudioAlarm] Error speaking text:', e);
+            }
+        }
+    }
+
+    function triggerKdReadyAlarm(kd) {
+        const isEnabled = localStorage.getItem('rok_web_alarm_enabled') !== '0'; // default true
+        if (!isEnabled) return;
+
+        playChimeBeep();
+        setTimeout(() => {
+            speakAlert(`Kingdom ${kd} sudah siap dipanen!`);
+        }, 550);
+    }
+    window.triggerKdReadyAlarm = triggerKdReadyAlarm;
+
+    function initAudioAlarmEngine() {
+        const toggleBtn = document.getElementById('btnToggleAudioAlarm');
+        const testBtn = document.getElementById('btnTestAudioAlarm');
+        const iconEl = document.getElementById('iconAudioAlarm');
+        const labelEl = document.getElementById('labelAudioAlarm');
+
+        if (!toggleBtn) return;
+
+        function updateAlarmUI() {
+            const isEnabled = localStorage.getItem('rok_web_alarm_enabled') !== '0';
+            if (iconEl) {
+                iconEl.className = isEnabled ? 'bi bi-volume-up-fill' : 'bi bi-volume-mute-fill text-secondary';
+            }
+            if (labelEl) {
+                labelEl.textContent = isEnabled ? 'Alarm: ON' : 'Alarm: OFF';
+            }
+            toggleBtn.className = isEnabled
+                ? 'btn btn-sm btn-outline-warning rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1'
+                : 'btn btn-sm btn-outline-secondary rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1';
+        }
+
+        updateAlarmUI();
+
+        toggleBtn.addEventListener('click', function () {
+            getWebAudioContext(); // user gesture unlocks audio
+            const currentlyEnabled = localStorage.getItem('rok_web_alarm_enabled') !== '0';
+            const newState = currentlyEnabled ? '0' : '1';
+            localStorage.setItem('rok_web_alarm_enabled', newState);
+            updateAlarmUI();
+            showSatsetToast(newState === '1' ? '🔊 Alarm Suara Browser diaktifkan!' : '🔇 Alarm Suara Browser dimatikan', 'success');
+        });
+
+        if (testBtn) {
+            testBtn.addEventListener('click', function () {
+                getWebAudioContext();
+                playChimeBeep();
+                setTimeout(() => {
+                    speakAlert('Tes bunyi alarm. Kingdom sembilan puluh siap panen!');
+                }, 550);
+                showSatsetToast('🎵 Menjalankan tes alarm suara browser...', 'success');
+            });
+        }
+    }
+
+    // ==========================================
+    // 8. 1-Click Copy Credentials Engine
+    // ==========================================
+    function init1ClickCopyEngine() {
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.btn-copy-cred') || e.target.closest('[data-copy]');
+            if (!btn) return;
+
+            const textToCopy = btn.getAttribute('data-copy');
+            if (!textToCopy) return;
+
+            e.preventDefault();
+            e.stopPropagation();
+
+            function showSuccess() {
+                const origHtml = btn.innerHTML;
+                btn.innerHTML = '<i class="bi bi-check2 text-success"></i> Disalin!';
+                showSatsetToast(`📋 Disalin ke clipboard: <b>${escapeHtml(textToCopy)}</b>`, 'success');
+                setTimeout(() => {
+                    btn.innerHTML = origHtml;
+                }, 1600);
+            }
+
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(textToCopy).then(showSuccess).catch(() => {
+                    fallbackClipboardCopy(textToCopy, showSuccess);
+                });
+            } else {
+                fallbackClipboardCopy(textToCopy, showSuccess);
+            }
+        });
+
+        function fallbackClipboardCopy(text, cb) {
+            const el = document.createElement('textarea');
+            el.value = text;
+            el.setAttribute('readonly', '');
+            el.style.position = 'absolute';
+            el.style.left = '-9999px';
+            document.body.appendChild(el);
+            el.select();
+            try {
+                document.execCommand('copy');
+                if (cb) cb();
+            } catch (err) {
+                showSatsetToast('Gagal menyalin otomatis. Silakan salin manual.', 'danger');
+            }
+            document.body.removeChild(el);
+        }
+    }
+
+    // ==========================================
+    // 9. Active Session Lock (Anti-Tabrakan)
+    // ==========================================
+    function initActiveSessionLock() {
+        document.addEventListener('click', async function (e) {
+            const btn = e.target.closest('.btn-toggle-lock');
+            if (!btn) return;
+
+            const kd = btn.getAttribute('data-kd');
+            if (!kd) return;
+
+            const csrfToken = document.querySelector('meta[name="csrf-token"]')?.getAttribute('content');
+            btn.disabled = true;
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+            try {
+                const res = await fetch(`/jadwal/kd/${kd}/toggle-lock`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRF-TOKEN': csrfToken,
+                        'Accept': 'application/json',
+                    },
+                    body: JSON.stringify({})
+                });
+
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    showSatsetToast(data.message, 'success');
+                    sessionStorage.setItem('satset_scroll_pos', window.scrollY);
+                    setTimeout(() => window.location.reload(), 300);
+                } else if (res.status === 409) {
+                    showSatsetToast(data.message || '⚠️ KD sedang dikerjakan operator lain!', 'danger');
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                } else {
+                    showSatsetToast(data.message || 'Gagal mengubah status kunci', 'danger');
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            } catch (err) {
+                showSatsetToast('Gagal terhubung ke server', 'danger');
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        });
+    }
+
+    // ==========================================
+    // 10. PWA Service Worker & Install Prompt
+    // ==========================================
+    function initPwaInstallation() {
+        // 1. Register Service Worker
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('/sw.js').then((reg) => {
+                    // Service worker successfully registered
+                }).catch((err) => {
+                    console.warn('[PWA] Service worker registration failed:', err);
+                });
+            });
+        }
+
+        // 2. Handle beforeinstallprompt for Add to Home Screen button
+        let deferredPrompt = null;
+        const installBtn = document.getElementById('btnInstallPwa');
+
+        window.addEventListener('beforeinstallprompt', (e) => {
+            e.preventDefault();
+            deferredPrompt = e;
+            if (installBtn) {
+                installBtn.classList.remove('d-none');
+            }
+        });
+
+        if (installBtn) {
+            installBtn.addEventListener('click', async () => {
+                if (!deferredPrompt) {
+                    showSatsetToast('💡 Untuk install di HP/Browser: Klik menu titik tiga browser lalu pilih "Tambahkan ke Layar Utama" / "Install App".', 'info');
+                    return;
+                }
+                deferredPrompt.prompt();
+                const choice = await deferredPrompt.userChoice;
+                if (choice.outcome === 'accepted') {
+                    showSatsetToast('🎉 Aplikasi RoK Joki berhasil dipasang ke Layar Utama!', 'success');
+                    installBtn.classList.add('d-none');
+                }
+                deferredPrompt = null;
+            });
+        }
+
+        window.addEventListener('appinstalled', () => {
+            if (installBtn) installBtn.classList.add('d-none');
+            showSatsetToast('🎉 Aplikasi RoK Joki siap digunakan dari Layar Utama!', 'success');
+        });
     }
 
     // Ekspor helper global jika dipanggil manual
