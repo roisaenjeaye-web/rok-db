@@ -112,7 +112,7 @@ class FonnteService
                 $payload['device'] = $deviceNumber;
             }
 
-            $response = Http::withHeaders([
+            $response = Http::asForm()->withHeaders([
                 'Authorization' => $token,
             ])->timeout(10)->post('https://api.fonnte.com/update-device', $payload);
 
