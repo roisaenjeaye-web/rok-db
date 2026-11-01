@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -26,35 +27,50 @@ class Character extends Model
         return $this->belongsTo(GameAccount::class);
     }
 
-    // Accessor: Pastikan nama user Admin tidak pernah muncul di farmer_stats
-    public function getFarmerStatsAttribute($value)
+    // Attribute: farmer_stats bersih dari nama Admin + tetap bisa di-SET (tidak merusak recordFarm/adjustFarmLog)
+    protected function farmerStats(): Attribute
     {
-        $stats = is_string($value) ? json_decode($value, true) : $value;
-        if (!is_array($stats) || empty($stats)) {
-            return [];
-        }
+        return Attribute::make(
+            get: function ($value) {
+                $stats = is_string($value) ? json_decode($value, true) : $value;
+                if (!is_array($stats) || empty($stats)) {
+                    return [];
+                }
 
-        static $adminNames = null;
-        if ($adminNames === null) {
-            $adminNames = User::where('is_admin', true)->pluck('name')->toArray();
-            if (empty($adminNames)) {
-                $adminNames = ['Rois'];
+                foreach (self::adminNames() as $adm) {
+                    unset($stats[$adm]);
+                }
+
+                return $stats;
+            },
+            set: fn ($value) => is_array($value) || $value === null
+                ? json_encode($value ?? [])
+                : $value,
+        );
+    }
+
+    // Cache nama admin sekali per-request (1 query saja, bukan per-char)
+    protected static ?array $adminNamesCache = null;
+
+    public static function adminNames(): array
+    {
+        if (static::$adminNamesCache === null) {
+            try {
+                $names = User::where('is_admin', true)->pluck('name')->toArray();
+            } catch (\Throwable $e) {
+                $names = [];
             }
+            static::$adminNamesCache = !empty($names) ? $names : ['Rois'];
         }
 
-        foreach ($adminNames as $adm) {
-            unset($stats[$adm]);
-        }
-
-        return $stats;
+        return static::$adminNamesCache;
     }
 
     // Helper untuk menambah log farm atas nama seorang worker/joki (Admin tidak dicatat)
     public function recordFarm(string $worker): void
     {
         // Admin tidak ikutan dicatat macul
-        $isAdmin = User::where('name', $worker)->where('is_admin', true)->exists();
-        if ($isAdmin) {
+        if (in_array($worker, self::adminNames(), true)) {
             return;
         }
 
@@ -72,8 +88,7 @@ class Character extends Model
     public function adjustFarmLog(string $worker, string $action, int $customCount = 0): void
     {
         // Admin tidak memiliki log macul
-        $isAdmin = User::where('name', $worker)->where('is_admin', true)->exists();
-        if ($isAdmin) {
+        if (in_array($worker, self::adminNames(), true)) {
             $stats = $this->farmer_stats ?? [];
             unset($stats[$worker]);
             $this->farmer_stats = $stats;

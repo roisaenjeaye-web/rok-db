@@ -210,7 +210,8 @@
                         </div>
                         <div class="kd-status-badge d-flex align-items-center gap-1">
                             @php
-                                $isKdMuted = \App\Models\BotSetting::getBoolean("kd_mute_{$kd}", false);
+                                // Diambil dari $kdMuteMap (sudah di-query sekali di controller, bukan per KD)
+                                $isKdMuted = $kdMuteMap[$kd] ?? false;
                             @endphp
                             @if($isKdMuted)
                                 @if($isAdmin)

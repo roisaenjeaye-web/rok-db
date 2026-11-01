@@ -228,16 +228,16 @@ class GameAccountController extends Controller
         $char = Character::findOrFail($id);
         $worker = $this->getActiveWorker($request);
 
-        DB::transaction(function () use ($char, $worker) {
-            $char->recordFarm($worker);
-            KdFarmerStat::incrementCount((int)$char->kd_number, $worker, 1);
-        });
-
+        // Ambil cooldown SEKALI di depan (hindari 2x query Kingdom di dalam + luar transaksi)
         $kingdom = Kingdom::where('kd_number', $char->kd_number)->first();
         $cooldownHours = $kingdom ? (float) $kingdom->cooldown_hours : 4.0;
+        $cdMins = (int) round($cooldownHours * 60);
 
-        if ($kingdom) {
-            $cdMins = (int) round($cooldownHours * 60);
+        DB::transaction(function () use ($char, $worker, $cdMins) {
+            $char->recordFarm($worker);
+            KdFarmerStat::incrementCount((int)$char->kd_number, $worker, 1);
+
+            // Cek sisa char siap panen -> 1 query COUNT (dulu pakai exists() terpisah)
             $hasReady = Character::where('kd_number', $char->kd_number)
                 ->where(function ($q) use ($cdMins) {
                     $q->whereNull('last_farmed_at')
@@ -245,13 +245,14 @@ class GameAccountController extends Controller
                 })->exists();
 
             if (!$hasReady) {
-                $kingdom->replied_at = null;
-                $kingdom->replied_by = null;
-                $kingdom->ready_since = null;
-                $kingdom->reminder_count = 0;
-                $kingdom->save();
+                Kingdom::where('kd_number', $char->kd_number)->update([
+                    'replied_at'     => null,
+                    'replied_by'     => null,
+                    'ready_since'    => null,
+                    'reminder_count' => 0,
+                ]);
             }
-        }
+        });
 
         $msg = "Char {$char->ign} selesai difarm oleh {$worker}! Jeda {$cooldownHours} jam dimulai.";
 
@@ -285,17 +286,19 @@ class GameAccountController extends Controller
         $cooldownMinutes = (int) round($cooldownHours * 60);
 
         $updatedCount = DB::transaction(function () use ($request, $worker, $cooldownMinutes) {
+            // Ambil 1 query saja (dulu: get() semua lalu difilter di PHP + recordFarm per char = N query)
             $chars = Character::where('game_account_id', $request->game_account_id)
                               ->where('kd_number', $request->kd_number)
+                              ->where(function ($query) use ($cooldownMinutes) {
+                                  $query->whereNull('last_farmed_at')
+                                        ->orWhere('last_farmed_at', '<=', now()->subMinutes($cooldownMinutes));
+                              })
                               ->get();
 
             $count = 0;
-            $cooldownThreshold = now()->subMinutes($cooldownMinutes);
             foreach ($chars as $char) {
-                if (!$char->last_farmed_at || $char->last_farmed_at <= $cooldownThreshold) {
-                    $char->recordFarm($worker);
-                    $count++;
-                }
+                $char->recordFarm($worker);
+                $count++;
             }
 
             if ($count > 0) {
@@ -343,6 +346,7 @@ class GameAccountController extends Controller
         \App\Models\BotSetting::warm();
 
         // 2. Query characters & gameAccount (Eager loaded)
+        //    + order:id agar urutan char konsisten & tidak ada query tersembunyi
         $characters = Character::with('gameAccount')->get();
         $groupedByKD = $characters->groupBy('kd_number')->sortKeys();
 
@@ -373,6 +377,13 @@ class GameAccountController extends Controller
             $kingdoms = Kingdom::all()->keyBy('kd_number');
         }
 
+        // 5. Ambil semua BotSetting KD mute sekali (hindari getBoolean per-KD di blade = N query)
+        $kdMuteMap = [];
+        foreach ($charKds as $mKd) {
+            $kdMuteMap[$mKd] = \App\Models\BotSetting::getBoolean("kd_mute_{$mKd}", false);
+        }
+
+        // 6. Worker & statistik: hanya yang NON-admin, di-group sekali (dulu difilter di PHP per KD)
         $adminNames = \App\Models\User::where('is_admin', true)->pluck('name')->toArray();
         $kdStats = KdFarmerStat::whereNotIn('worker_name', $adminNames)->get()->groupBy('kd_number');
         $knownWorkers = $this->getKnownWorkers();
@@ -385,7 +396,7 @@ class GameAccountController extends Controller
 
         return view('jadwal', compact(
             'groupedByKD', 'kdStats', 'knownWorkers', 'activeWorker', 'kingdoms', 'isAdmin',
-            'isAutoNotify', 'spamUnrepliedInterval', 'maxWorkMinutes', 'spamOverdueInterval'
+            'isAutoNotify', 'spamUnrepliedInterval', 'maxWorkMinutes', 'spamOverdueInterval', 'kdMuteMap'
         ));
     }
 

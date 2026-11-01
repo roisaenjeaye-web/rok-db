@@ -48,12 +48,13 @@ class KingdomController extends Controller
         $allStats = KdFarmerStat::whereNotIn('worker_name', $adminNames)->get();
         $allSalaries = Salary::whereNotIn('worker_name', $adminNames)->get();
 
-        $workerNamesFromStats = $allStats->pluck('worker_name')->unique()->toArray();
-        $workerNamesFromSalary = $allSalaries->pluck('worker_name')->unique()->toArray();
+        // Group sekali saja -> O(n) bukan O(n x jumlah worker)
+        $statsByWorker   = $allStats->groupBy('worker_name');
+        $salariesByWorker = $allSalaries->groupBy('worker_name');
 
         $allWorkers = collect($operatorUsers)
-            ->merge($workerNamesFromStats)
-            ->merge($workerNamesFromSalary)
+            ->merge($allStats->pluck('worker_name')->unique())
+            ->merge($allSalaries->pluck('worker_name')->unique())
             ->reject(fn($name) => in_array($name, $adminNames) || empty($name))
             ->unique()
             ->values()
@@ -64,9 +65,9 @@ class KingdomController extends Controller
         $totalOverallSalary = (float) $allSalaries->sum('amount');
 
         foreach ($allWorkers as $worker) {
-            $workerStats = $allStats->where('worker_name', $worker);
-            $totalFarm = (int) $workerStats->sum('farm_count');
-            $workerSalary = (float) $allSalaries->where('worker_name', $worker)->sum('amount');
+            $workerStats  = $statsByWorker->get($worker) ?? collect();
+            $workerSalary = (float) ($salariesByWorker->get($worker)?->sum('amount') ?? 0);
+            $totalFarm    = (int) $workerStats->sum('farm_count');
 
             $kdBreakdown = $workerStats->where('farm_count', '>', 0)->map(function ($stat) {
                 return [
