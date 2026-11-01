@@ -307,10 +307,30 @@ class BotNotificationController extends Controller
             $name = 'Operator';
         }
 
-        // Abaikan jika pesan dikirim oleh nomor bot sendiri (agar tidak looping self-reply)
-        if (!empty($cleanDevice) && (($cleanMember && $cleanMember === $cleanDevice) || ($cleanSender && $cleanSender === $cleanDevice))) {
+        // 1. FILTER UTAMA ANTI-LOOPING: Abaikan jika pesan berisi teks template bot sendiri
+        if (str_contains($message, 'BALASAN DITERIMA') 
+            || str_contains($message, 'PANGGILAN PANEN') 
+            || str_contains($message, 'PANEN SERENTAK')
+            || str_contains($message, 'Sent via fonnte.com')
+            || str_contains($message, 'Buka & Ceklis di Web')
+            || str_contains($message, 'Buka Dashboard')
+            || str_contains($message, 'Semangat macul')
+            || str_contains($message, 'rok-db.vercel.app')
+            || in_array(strtolower($rawName), ['bot rok', 'rokalth', 'bot'])) {
+            return response()->json(['status' => true, 'message' => 'Abaikan pesan otomatis bot sendiri']);
+        }
+
+        // 2. Abaikan jika pesan dikirim oleh nomor bot sendiri (agar tidak looping self-reply)
+        if ($cleanMember === '6289506819226' || $cleanSender === '6289506819226' || (!empty($cleanDevice) && ($cleanMember === $cleanDevice || $cleanSender === $cleanDevice))) {
             return response()->json(['status' => true, 'message' => 'Abaikan pesan sendiri dari bot']);
         }
+
+        // 3. Debounce antrean duplikat pesan yang sama dalam 30 detik
+        $debounceKey = 'fonnte_msg_' . md5($sender . '_' . $member . '_' . $message);
+        if (\Illuminate\Support\Facades\Cache::has($debounceKey)) {
+            return response()->json(['status' => true, 'message' => 'Pesan duplikat diabaikan (debounce)']);
+        }
+        \Illuminate\Support\Facades\Cache::put($debounceKey, true, now()->addSeconds(30));
 
         $targetPhone = (string) BotSetting::get('target_phone', '');
         if (!empty($targetPhone)) {
@@ -361,6 +381,11 @@ class BotNotificationController extends Controller
             $cooldownHours = $kingdom ? (float) $kingdom->cooldown_hours : 4.0;
             $cooldownMinutes = (int) round($cooldownHours * 60);
 
+            // ANTI-SPAM GUARD: Jika KD ini baru saja dibalas dalam 5 menit terakhir, abaikan agar tidak spam reply beruntun
+            if ($kingdom && $kingdom->replied_at && $kingdom->replied_at->greaterThan(now()->subMinutes(5))) {
+                continue;
+            }
+
             $readyCount = 0;
             foreach ($kChars as $c) {
                 if (!$c->last_farmed_at || now()->greaterThanOrEqualTo($c->last_farmed_at->copy()->addMinutes($cooldownMinutes))) {
@@ -395,7 +420,7 @@ class BotNotificationController extends Controller
             if (!$recentKingdom) {
                 $recentKingdom = Kingdom::orderBy('updated_at', 'desc')->first();
             }
-            if ($recentKingdom) {
+            if ($recentKingdom && (!$recentKingdom->replied_at || $recentKingdom->replied_at->lessThanOrEqualTo(now()->subMinutes(5)))) {
                 $recentKingdom->replied_at = now();
                 $recentKingdom->replied_by = $name;
                 $recentKingdom->save();
@@ -485,6 +510,11 @@ class BotNotificationController extends Controller
             $kingdom = $kingdoms->get($kd);
             $cooldownHours = $kingdom ? (float) $kingdom->cooldown_hours : 4.0;
             $cooldownMinutes = (int) round($cooldownHours * 60);
+
+            // ANTI-SPAM GUARD: Jika KD ini baru saja dibalas dalam 5 menit terakhir, abaikan agar tidak spam reply beruntun
+            if ($kingdom && $kingdom->replied_at && $kingdom->replied_at->greaterThan(now()->subMinutes(5))) {
+                continue;
+            }
 
             $readyCount = 0;
             $latestFarmedAt = null;
