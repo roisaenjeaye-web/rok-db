@@ -91,6 +91,43 @@ class FonnteService
 
 
     /**
+     * Daftarkan webhook URL dan aktifkan autoread ke server Fonnte secara otomatis
+     */
+    public static function updateDeviceWebhook(string $webhookUrl, ?string $token = null): array
+    {
+        $token = $token ?: BotSetting::get('fonnte_token', env('FONNTE_TOKEN'));
+        if (empty($token)) {
+            return ['success' => false, 'message' => 'Token belum diatur'];
+        }
+
+        try {
+            $deviceInfo = self::checkDeviceStatus($token);
+            $deviceNumber = $deviceInfo['device'] ?? '';
+
+            $payload = [
+                'webhook' => $webhookUrl,
+                'autoread' => 'true',
+            ];
+            if (!empty($deviceNumber) && $deviceNumber !== '-') {
+                $payload['device'] = $deviceNumber;
+            }
+
+            $response = Http::withHeaders([
+                'Authorization' => $token,
+            ])->timeout(10)->post('https://api.fonnte.com/update-device', $payload);
+
+            $json = $response->json();
+            return [
+                'success' => $response->successful() && ($json['status'] ?? false),
+                'data' => $json,
+            ];
+        } catch (\Exception $e) {
+            Log::warning('Fonnte updateDeviceWebhook error: ' . $e->getMessage());
+            return ['success' => false, 'message' => $e->getMessage()];
+        }
+    }
+
+    /**
      * Cek status koneksi token & device Fonnte
      */
     public static function checkDeviceStatus(?string $token = null): array

@@ -102,9 +102,15 @@ class BotNotificationController extends Controller
             BotSetting::set('spam_overdue_interval', (int) $request->input('spam_overdue_interval'));
         }
 
+        $webhookUrl = $this->getWebhookUrl();
+        $fonnteToken = BotSetting::get('fonnte_token', '');
+        if (!empty($fonnteToken)) {
+            FonnteService::updateDeviceWebhook($webhookUrl, $fonnteToken);
+        }
+
         return response()->json([
             'success' => true,
-            'message' => 'Pengaturan Bot WhatsApp Fonnte berhasil disimpan!',
+            'message' => 'Pengaturan Bot WhatsApp Fonnte berhasil disimpan dan Webhook otomatis disinkronkan!',
             'settings' => [
                 'fonnte_token' => BotSetting::get('fonnte_token', ''),
                 'target_phone' => BotSetting::get('target_phone', ''),
@@ -112,7 +118,7 @@ class BotNotificationController extends Controller
                 'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 15),
                 'max_work_minutes' => (int) BotSetting::get('max_work_minutes', 30),
                 'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 5),
-                'webhook_url' => $this->getWebhookUrl(),
+                'webhook_url' => $webhookUrl,
             ]
         ]);
     }
@@ -294,7 +300,7 @@ class BotNotificationController extends Controller
         if (!empty($targetPhone)) {
             $cleanTarget = preg_replace('/[^0-9]/', '', $targetPhone);
 
-            // Validasi apakah pesan berasal dari grup target atau member grup target
+            // Validasi apakah pesan berasal dari grup target, member grup target, atau japri langsung ke bot
             $isTargetGroup = ($cleanSender && $cleanTarget && $cleanSender === $cleanTarget)
                 || str_contains($targetPhone, $sender)
                 || (!empty($cleanSender) && str_contains($sender, $cleanTarget))
@@ -303,16 +309,25 @@ class BotNotificationController extends Controller
                 || (!empty($cleanMember) && !empty($cleanTarget) && str_contains($cleanTarget, $cleanMember));
             $isSenderDirect = ($sender === $targetPhone)
                 || (!empty($cleanSender) && !empty($cleanTarget) && $cleanSender === $cleanTarget);
+            $isPrivateChat = !str_contains($sender, '@g.us');
 
-            if (!$isTargetGroup && !$isTargetDirect && !$isSenderDirect) {
+            if (!$isTargetGroup && !$isTargetDirect && !$isSenderDirect && !$isPrivateChat) {
                 return response()->json(['status' => true, 'message' => 'Pesan dari luar target diabaikan']);
             }
         }
 
-        // Cek apakah pesan menyebut KD spesifik (contoh: "kd 2359 otw", "2359 siap", "#2359")
+        // 1. Cek apakah pesan menyebut KD spesifik (contoh: "kd 2359 otw", "2359 siap", "#2359", "2359", "otw 2359")
         $targetKd = null;
-        if (preg_match('/(?:kd\s*#?|#)\b(\d{3,5})\b/i', $message, $m)) {
+        if (preg_match('/(?:kd\s*#?|#)?\b(\d{3,5})\b/i', $message, $m)) {
             $targetKd = (int) $m[1];
+        }
+
+        // 2. Cek apakah pesan mengandung kata kunci konfirmasi/respons positif
+        $isAckKeyword = preg_match('/\b(otw|siap|gas|macul|ok|oke|done|saya|gua|gw|ak|aku|panen|proses|login|on|kerjakan|handle)\b/i', $message);
+
+        // Jika tidak ada nomor KD dan juga tidak ada kata kunci konfirmasi, abaikan agar obrolan biasa di grup tidak memicu bot
+        if ($targetKd === null && !$isAckKeyword) {
+            return response()->json(['status' => true, 'message' => 'Bukan pesan konfirmasi KD']);
         }
 
         // Cari KD yang saat ini berstatus Siap Panen (readyCount > 0)
@@ -758,7 +773,7 @@ class BotNotificationController extends Controller
         if ($appUrl && !str_contains($appUrl, 'localhost') && !str_contains($appUrl, '127.0.0.1')) {
             return rtrim($appUrl, '/') . '/jadwal';
         }
-        return 'https://rokjoki.vercel.app/jadwal';
+        return 'https://rok-db.vercel.app/jadwal';
     }
 
     // Helper ambil URL Webhook Fonnte publik
@@ -771,6 +786,6 @@ class BotNotificationController extends Controller
         if ($appUrl && !str_contains($appUrl, 'localhost') && !str_contains($appUrl, '127.0.0.1')) {
             return rtrim($appUrl, '/') . '/api/fonnte/webhook';
         }
-        return 'https://rokjoki.vercel.app/api/fonnte/webhook';
+        return 'https://rok-db.vercel.app/api/fonnte/webhook';
     }
 }
