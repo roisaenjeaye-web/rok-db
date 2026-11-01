@@ -352,7 +352,7 @@ class BotNotificationController extends Controller
                 }
             }
 
-            if ($readyCount > 0) {
+            if ($readyCount > 0 || $targetKd !== null) {
                 if (!$kingdom) {
                     $kingdom = Kingdom::firstOrCreate(['kd_number' => $kd]);
                 }
@@ -366,7 +366,26 @@ class BotNotificationController extends Controller
 
                 $acknowledgedKds[] = [
                     'kd' => $kd,
-                    'ready_count' => $readyCount,
+                    'ready_count' => $readyCount ?: $kChars->count(),
+                ];
+            }
+        }
+
+        // Fallback: Jika user balas konfirmasi ("otw", "siap", dll) saat char masih masa jeda / baru saja difarm
+        if (empty($acknowledgedKds) && $isAckKeyword) {
+            $recentKingdom = Kingdom::whereNotNull('last_notified_at')
+                ->orderBy('last_notified_at', 'desc')
+                ->first();
+            if (!$recentKingdom) {
+                $recentKingdom = Kingdom::orderBy('updated_at', 'desc')->first();
+            }
+            if ($recentKingdom) {
+                $recentKingdom->replied_at = now();
+                $recentKingdom->replied_by = $name;
+                $recentKingdom->save();
+                $acknowledgedKds[] = [
+                    'kd' => $recentKingdom->kd_number,
+                    'ready_count' => 0,
                 ];
             }
         }
