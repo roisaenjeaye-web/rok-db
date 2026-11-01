@@ -369,7 +369,7 @@ class GameAccountController extends Controller
         $activeWorker = $this->getActiveWorker(request());
         $kingdoms = Kingdom::all()->keyBy('kd_number');
         $isAdmin = auth()->check() ? auth()->user()->isAdmin() : false;
-        $isAutoNotify = (bool) \App\Models\BotSetting::get('is_auto_notify', true);
+        $isAutoNotify = \App\Models\BotSetting::getBoolean('is_auto_notify', true);
         $spamUnrepliedInterval = (int) \App\Models\BotSetting::get('spam_unreplied_interval', 15);
         $maxWorkMinutes = (int) \App\Models\BotSetting::get('max_work_minutes', 30);
         $spamOverdueInterval = (int) \App\Models\BotSetting::get('spam_overdue_interval', 5);
@@ -486,8 +486,9 @@ class GameAccountController extends Controller
         $kingdom->update(['cooldown_hours' => $cooldownHours]);
 
         // Pengaturan Mute/Tidur Khusus KD Ini (Admin Only)
-        if (auth()->check() && auth()->user()->isAdmin() && $request->has('is_kd_muted')) {
-            \App\Models\BotSetting::set("kd_mute_{$kd}", $request->boolean('is_kd_muted') ? '1' : '0');
+        if (auth()->check() && auth()->user()->isAdmin()) {
+            $isMuted = $request->boolean('is_kd_muted');
+            \App\Models\BotSetting::set("kd_mute_{$kd}", $isMuted ? '1' : '0');
         }
 
         $msg = "⏱️ Waktu jeda macul KD #{$kd} berhasil diatur menjadi {$cooldownHours} Jam sekali!";
@@ -509,7 +510,7 @@ class GameAccountController extends Controller
     {
         self::checkAdminOrFail();
 
-        $current = (bool) \App\Models\BotSetting::get("kd_mute_{$kd}", false);
+        $current = \App\Models\BotSetting::getBoolean("kd_mute_{$kd}", false);
         $newStatus = !$current;
         \App\Models\BotSetting::set("kd_mute_{$kd}", $newStatus ? '1' : '0');
 

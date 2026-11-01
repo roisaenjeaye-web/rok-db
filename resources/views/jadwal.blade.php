@@ -209,10 +209,16 @@
                         </div>
                         <div class="kd-status-badge d-flex align-items-center gap-1">
                             @php
-                                $isKdMuted = (bool) \App\Models\BotSetting::get("kd_mute_{$kd}", false);
+                                $isKdMuted = \App\Models\BotSetting::getBoolean("kd_mute_{$kd}", false);
                             @endphp
                             @if($isKdMuted)
-                                <span class="badge bg-secondary" title="Pengingat KD ini dimatikan oleh Admin (Mode Tidur)"><i class="bi bi-moon-stars-fill"></i> Tidur</span>
+                                @if($isAdmin)
+                                    <button type="button" class="btn btn-xs btn-dark rounded-pill px-2 py-0 fw-bold shadow-xs btn-toggle-mute-kd" data-kd="{{ $kd }}" title="Mode Tidur aktif. Klik untuk Bangunkan / Aktifkan kembali Bot CD untuk KD #{{ $kd }}">
+                                        <i class="bi bi-moon-stars-fill text-warning me-1"></i>Tidur (Klik Bangunkan)
+                                    </button>
+                                @else
+                                    <span class="badge bg-secondary" title="Pengingat KD ini dimatikan oleh Admin (Mode Tidur)"><i class="bi bi-moon-stars-fill"></i> Tidur</span>
+                                @endif
                             @endif
                             @if($readyCount == 0)
                                 <span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> All Cooldown</span>
@@ -602,6 +608,7 @@
                                 @if($isAdmin)
                                 <div class="border-top pt-2 mt-2 mb-3">
                                     <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
+                                        <input type="hidden" name="is_kd_muted" value="0">
                                         <input class="form-check-input ms-0" type="checkbox" name="is_kd_muted" value="1" id="checkMuteKD{{ $kd }}" {{ $isKdMuted ? 'checked' : '' }} style="cursor: pointer;">
                                         <label class="form-check-label small fw-bold text-dark" for="checkMuteKD{{ $kd }}" style="cursor: pointer;">
                                             <i class="bi bi-moon-stars text-secondary me-1"></i> Matikan CD KD Ini (Mode Tidur)
@@ -772,13 +779,13 @@
                     <!-- Switch Auto Send / Mode Tidur -->
                     <div class="card bg-light border-0 p-2 mb-3">
                         <div class="form-check form-switch m-0 d-flex align-items-center gap-2">
-                            <input class="form-check-input ms-0" type="checkbox" role="switch" id="checkAutoNotify" checked style="cursor: pointer; width: 36px; height: 20px;">
-                            <label class="form-check-label fw-bold small text-dark" for="checkAutoNotify" style="cursor: pointer;">
-                                🔔 Aktifkan Pengingat & Spam Bot CD
+                            <input class="form-check-input ms-0" type="checkbox" role="switch" id="checkAutoNotify" {{ $isAutoNotify ? 'checked' : '' }} style="cursor: pointer; width: 36px; height: 20px;">
+                            <label class="form-check-label fw-bold small text-dark" for="checkAutoNotify" id="lblCheckAutoNotify" style="cursor: pointer;">
+                                {{ $isAutoNotify ? '🔔 Pengingat Bot CD: AKTIF' : '😴 Mode Tidur: AKTIF (Bot Dimatikan)' }}
                             </label>
                         </div>
                         <div class="text-muted small ps-5 mt-1" style="font-size: 11px;">
-                            <b>Mode Tidur:</b> Matikan saklar ini saat jam istirahat/tidur agar bot tidak spam pesan ke grup WhatsApp ("Orang kan tidur juga").
+                            <b>Keterangan:</b> Saklar ON = Bot aktif kirim pesan WhatsApp saat panen. Saklar OFF = <b>Mode Tidur</b> (Bot istirahat, tidak spam chat saat malam/tidur).
                         </div>
                     </div>
 

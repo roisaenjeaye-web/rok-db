@@ -29,7 +29,7 @@ class BotNotificationController extends Controller
             'success' => true,
             'fonnte_token' => BotSetting::get('fonnte_token', ''),
             'target_phone' => BotSetting::get('target_phone', ''),
-            'is_auto_notify' => (bool) BotSetting::get('is_auto_notify', true),
+            'is_auto_notify' => BotSetting::getBoolean('is_auto_notify', true),
             'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 15),
             'max_work_minutes' => (int) BotSetting::get('max_work_minutes', 30),
             'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 5),
@@ -43,7 +43,7 @@ class BotNotificationController extends Controller
     {
         $this->requireAdmin();
 
-        $current = (bool) BotSetting::get('is_auto_notify', true);
+        $current = BotSetting::getBoolean('is_auto_notify', true);
         $newStatus = !$current;
         BotSetting::set('is_auto_notify', $newStatus ? '1' : '0');
 
@@ -108,7 +108,7 @@ class BotNotificationController extends Controller
             'settings' => [
                 'fonnte_token' => BotSetting::get('fonnte_token', ''),
                 'target_phone' => BotSetting::get('target_phone', ''),
-                'is_auto_notify' => (bool) BotSetting::get('is_auto_notify', true),
+                'is_auto_notify' => BotSetting::getBoolean('is_auto_notify', true),
                 'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 15),
                 'max_work_minutes' => (int) BotSetting::get('max_work_minutes', 30),
                 'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 5),
@@ -405,7 +405,7 @@ class BotNotificationController extends Controller
      */
     public static function evaluateAndNotifyKingdoms(?string $worker = null): array
     {
-        $isAuto = (bool) BotSetting::get('is_auto_notify', true);
+        $isAuto = BotSetting::getBoolean('is_auto_notify', true);
         if (!$isAuto) {
             return ['success' => true, 'auto_enabled' => false, 'notified_count' => 0, 'notified_kds' => []];
         }
@@ -427,7 +427,7 @@ class BotNotificationController extends Controller
 
         foreach ($groupedByKD as $kd => $kChars) {
             // Cek apakah KD ini secara spesifik dimatikan/dijeda oleh admin (Mode Tidur KD)
-            $isKdMuted = (bool) BotSetting::get("kd_mute_{$kd}", false);
+            $isKdMuted = BotSetting::getBoolean("kd_mute_{$kd}", false);
             if ($isKdMuted) {
                 continue;
             }

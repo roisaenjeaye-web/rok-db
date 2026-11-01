@@ -53,6 +53,8 @@ Route::get('/api/bot/debug', function () {
 
         $diagnostics[] = [
             'kd' => $kd,
+            'is_kd_muted' => \App\Models\BotSetting::getBoolean("kd_mute_{$kd}", false),
+            'raw_kd_mute' => \App\Models\BotSetting::get("kd_mute_{$kd}", null),
             'total_chars' => $kChars->count(),
             'ready_count' => $readyCount,
             'latest_farmed_at' => $latestFarmedAt ? $latestFarmedAt->toIso8601String() : null,
@@ -71,6 +73,22 @@ Route::get('/api/bot/debug', function () {
         'has_phone' => !empty($phone),
         'has_token' => !empty($token),
         'diagnostics' => $diagnostics,
+    ]);
+});
+
+Route::get('/api/bot/unmute-all-kds', function () {
+    $kds = \App\Models\Character::distinct()->pluck('kd_number')->toArray();
+    $unmuted = [];
+    foreach ($kds as $kd) {
+        \App\Models\BotSetting::set("kd_mute_{$kd}", '0');
+        $unmuted[] = $kd;
+    }
+    \App\Models\BotSetting::set('is_auto_notify', '1');
+    return response()->json([
+        'success' => true,
+        'message' => 'Semua KD dan Bot CD berhasil di-unmute (Bangun / Aktif)!',
+        'unmuted_kds' => $unmuted,
+        'is_auto_notify' => true
     ]);
 });
 

@@ -1051,7 +1051,13 @@
                     if (data.success) {
                         if (inputToken) inputToken.value = data.fonnte_token || '';
                         if (inputPhone) inputPhone.value = data.target_phone || '';
-                        if (checkAuto) checkAuto.checked = !!data.is_auto_notify;
+                        if (checkAuto) {
+                            checkAuto.checked = !!data.is_auto_notify;
+                            const lblAuto = document.getElementById('lblCheckAutoNotify');
+                            if (lblAuto) {
+                                lblAuto.innerHTML = checkAuto.checked ? '🔔 Pengingat Bot CD: AKTIF' : '😴 Mode Tidur: AKTIF (Bot Dimatikan)';
+                            }
+                        }
                         if (inputWebhook && data.webhook_url) inputWebhook.value = data.webhook_url;
 
                         if (inputUnreplied && data.spam_unreplied_interval) {
@@ -1110,6 +1116,15 @@
             }
 
             modalEl.addEventListener('show.bs.modal', loadBotSettings);
+
+            if (checkAuto) {
+                checkAuto.addEventListener('change', function () {
+                    const lblAuto = document.getElementById('lblCheckAutoNotify');
+                    if (lblAuto) {
+                        lblAuto.innerHTML = this.checked ? '🔔 Pengingat Bot CD: AKTIF' : '😴 Mode Tidur: AKTIF (Bot Dimatikan)';
+                    }
+                });
+            }
 
             if (btnToggleEye && inputToken) {
                 btnToggleEye.addEventListener('click', function () {
@@ -1357,6 +1372,42 @@
                 }
             } catch (err) {
                 showSatsetToast('Gagal memproses tanda OTW', 'danger');
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        });
+
+        // Listener 1-Klik Bangunkan / Matikan CD per KD (Admin Only)
+        document.addEventListener('click', async function (e) {
+            const btn = e.target.closest('.btn-toggle-mute-kd');
+            if (!btn) return;
+            const kd = btn.getAttribute('data-kd');
+            if (!kd || btn.disabled) return;
+
+            btn.disabled = true;
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width: 10px; height: 10px;"></span>';
+
+            try {
+                const res = await fetch(`/jadwal/kd/${kd}/toggle-pause-cd`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showSatsetToast(data.message, 'success');
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    showSatsetToast(data.message || 'Gagal mengubah status tidur KD', 'danger');
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            } catch (err) {
+                showSatsetToast('Gagal menghubungi server', 'danger');
                 btn.disabled = false;
                 btn.innerHTML = origHtml;
             }
