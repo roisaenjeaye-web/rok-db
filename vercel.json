@@ -31,6 +31,18 @@
       "dest": "/public/robots.txt"
     },
     {
+      "src": "/manifest.json",
+      "dest": "/public/manifest.json"
+    },
+    {
+      "src": "/sw.js",
+      "dest": "/public/sw.js"
+    },
+    {
+      "src": "/icon-(.*).png",
+      "dest": "/public/icon-$1.png"
+    },
+    {
       "src": "/(.*)",
       "dest": "/api/index.php"
     }

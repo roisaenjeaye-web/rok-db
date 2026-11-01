@@ -215,3 +215,30 @@ Route::get('/js/satset.js', function () {
         'Cache-Control' => 'no-cache, no-store, must-revalidate',
     ]);
 });
+
+// Serve PWA assets directly with proper headers
+Route::get('/manifest.json', function () {
+    return response()->file(public_path('manifest.json'), [
+        'Content-Type' => 'application/manifest+json; charset=utf-8',
+        'Cache-Control' => 'public, max-age=3600',
+    ]);
+});
+Route::get('/sw.js', function () {
+    return response()->file(public_path('sw.js'), [
+        'Content-Type' => 'application/javascript; charset=utf-8',
+        'Service-Worker-Allowed' => '/',
+        'Cache-Control' => 'no-cache, no-store, must-revalidate',
+    ]);
+});
+Route::get('/icon-192.png', function () {
+    return response()->file(public_path('icon-192.png'), [
+        'Content-Type' => 'image/png',
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+});
+Route::get('/icon-512.png', function () {
+    return response()->file(public_path('icon-512.png'), [
+        'Content-Type' => 'image/png',
+        'Cache-Control' => 'public, max-age=86400',
+    ]);
+});
