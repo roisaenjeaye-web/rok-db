@@ -280,16 +280,32 @@ class BotNotificationController extends Controller
 
         Log::info('Fonnte Webhook Received: ' . json_encode($payload));
 
+        // Abaikan webhook status pengiriman pesan (delivery receipt: sent, delivered, pending, failed)
+        if (!empty($payload['status']) && in_array(strtolower($payload['status']), ['sent', 'delivered', 'pending', 'failed', 'read']) && empty($payload['message'])) {
+            return response()->json(['status' => true, 'message' => 'Status delivery diabaikan']);
+        }
+
         $sender = (string) ($payload['sender'] ?? $request->input('sender', ''));
         $member = (string) ($payload['member'] ?? $request->input('member', ''));
-        $name = (string) ($payload['name'] ?? ($request->input('name') ?: 'Anggota Grup'));
+        $rawName = trim((string) ($payload['name'] ?? ($payload['pushname'] ?? ($request->input('name') ?: ''))));
         $message = trim((string) ($payload['message'] ?? $request->input('message', '')));
         $device = (string) ($payload['device'] ?? $request->input('device', ''));
+        $inboxid = (string) ($payload['inboxid'] ?? $request->input('inboxid', ''));
 
         // Bersihkan angka untuk deteksi nomor bot sendiri
         $cleanDevice = preg_replace('/[^0-9]/', '', $device);
         $cleanMember = preg_replace('/[^0-9]/', '', $member);
         $cleanSender = preg_replace('/[^0-9]/', '', $sender);
+
+        // Resolusi nama pengirim: prioritaskan name/pushname dari WA, atau nama Operator dari User DB
+        if (!empty($rawName) && $rawName !== 'Anggota Grup') {
+            $name = $rawName;
+        } elseif (!empty($cleanMember)) {
+            $matchedUser = \App\Models\User::where('phone', 'like', "%{$cleanMember}%")->first();
+            $name = $matchedUser ? $matchedUser->name : ('+' . $cleanMember);
+        } else {
+            $name = 'Operator';
+        }
 
         // Abaikan jika pesan dikirim oleh nomor bot sendiri (agar tidak looping self-reply)
         if (!empty($cleanDevice) && (($cleanMember && $cleanMember === $cleanDevice) || ($cleanSender && $cleanSender === $cleanDevice))) {
@@ -322,8 +338,8 @@ class BotNotificationController extends Controller
             $targetKd = (int) $m[1];
         }
 
-        // 2. Cek apakah pesan mengandung kata kunci konfirmasi/respons positif
-        $isAckKeyword = preg_match('/\b(otw|siap|gas|macul|ok|oke|done|saya|gua|gw|ak|aku|panen|proses|login|on|kerjakan|handle)\b/i', $message);
+        // 2. Cek apakah pesan mengandung kata kunci konfirmasi/respons positif (lengkap dengan ragam bahasa joki)
+        $isAckKeyword = preg_match('/\b(otw+|siap+|gas+|macul|ok+|oke+|done|saya|gua|gw|ak|aku|panen|proses|login|on|kerjakan|kerjain|handle|bntr|bentar|farming|farm|dah|udh|udah|sdh|sip|yoi|iya)\b/i', $message);
 
         // Jika tidak ada nomor KD dan juga tidak ada kata kunci konfirmasi, abaikan agar obrolan biasa di grup tidak memicu bot
         if ($targetKd === null && !$isAckKeyword) {
@@ -405,8 +421,8 @@ class BotNotificationController extends Controller
             $replyMsg .= "🔗 *Buka & Ceklis di Web:* " . $this->getDashboardUrl() . "\n";
             $replyMsg .= "_Jika dalam {$maxWorkMinutes} menit belum selesai/diceklis di web, bot akan spam tiap {$spamOverdueInterval} menit. Semangat macul!_ 🌾🚜";
 
-            $phoneToSend = $targetPhone ?: $sender;
-            FonnteService::sendMessage($phoneToSend, $replyMsg);
+            $phoneToSend = (str_contains($sender, '@g.us') && !empty($sender)) ? $sender : ($targetPhone ?: $sender);
+            FonnteService::sendMessage($phoneToSend, $replyMsg, null, $inboxid ?: null);
         }
 
         return response()->json([

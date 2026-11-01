@@ -11,7 +11,7 @@ class FonnteService
     /**
      * Kirim pesan WhatsApp melalui Fonnte API
      */
-    public static function sendMessage(string $target, string $message, ?string $token = null): array
+    public static function sendMessage(string $target, string $message, ?string $token = null, ?string $inboxid = null): array
     {
         $token = $token ?: BotSetting::get('fonnte_token', env('FONNTE_TOKEN'));
 
@@ -35,6 +35,11 @@ class FonnteService
                 'message' => $message,
                 'countryCode' => '62',
             ];
+
+            // Jika ada inboxid, gunakan untuk fitur Quoted Reply (membalas pesan tertentu secara visual)
+            if (!empty($inboxid)) {
+                $payload['inboxid'] = $inboxid;
+            }
 
             // Jika target berupa Grup WhatsApp (@g.us), lakukan tag ke seluruh member grup
             if (str_contains($target, '@g.us')) {
@@ -107,6 +112,8 @@ class FonnteService
             $payload = [
                 'webhook' => $webhookUrl,
                 'autoread' => 'true',
+                'personal' => 'true',
+                'group' => 'true',
             ];
             if (!empty($deviceNumber) && $deviceNumber !== '-') {
                 $payload['device'] = $deviceNumber;
