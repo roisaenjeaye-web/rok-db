@@ -352,27 +352,45 @@ class BotNotificationController extends Controller
             }
         }
 
-        // 1. Cek apakah pesan menyebut KD spesifik (contoh: "kd 2359 otw", "2359 siap", "#2359", "2359", "otw 2359")
-        $targetKd = null;
-        if (preg_match('/(?:kd\s*#?|#)?\b(\d{3,5})\b/i', $message, $m)) {
-            $targetKd = (int) $m[1];
+        // 1. Cek apakah pesan mengandung negasi / pembatalan (contoh: "ga bisa otw", "belum siap", "jangan gas")
+        if (preg_match('/\b(ga|gak|ngga|nggak|bukan|belum|blm|jangan|batal|cancel)\b/i', $message)) {
+            return response()->json(['status' => true, 'message' => 'Pesan mengandung negasi/pembatalan, diabaikan']);
         }
 
-        // 2. Cek apakah pesan mengandung kata kunci konfirmasi/respons positif (lengkap dengan ragam bahasa joki)
-        $isAckKeyword = preg_match('/\b(otw+|siap+|gas+|macul|ok+|oke+|done|saya|gua|gw|ak|aku|panen|proses|login|on|kerjakan|kerjain|handle|bntr|bentar|farming|farm|dah|udh|udah|sdh|sip|yoi|iya)\b/i', $message);
+        // 2. Deteksi apakah pesan menyebut KD spesifik yang valid di database (contoh: "kd 4180 otw", "4180 siap", "#4180", "4180")
+        $targetKd = null;
+        if (preg_match('/(?:kd\s*#?|#)?\b(\d{3,5})\b/i', $message, $m)) {
+            $candidateKd = (int) $m[1];
+            if (Kingdom::where('kd_number', $candidateKd)->exists()) {
+                $targetKd = $candidateKd;
+            }
+        }
 
-        // Jika tidak ada nomor KD dan juga tidak ada kata kunci konfirmasi, abaikan agar obrolan biasa di grup tidak memicu bot
+        // 3. Deteksi kata kunci konfirmasi aksi joki yang jelas (HAPUS kata obrolan santai: gua, gw, saya, aku, on, iya, dah, bentar)
+        $isActionKeyword = (bool) preg_match('/\b(otw+|otewe|siap+|siaap+|gas+|gass+|gaskeun|macul|login|handle|kerjakan|kerjain|panen|farming|farm)\b/i', $message);
+
+        // Respons singkat spesifik (hanya jika pesan pendek <= 15 karakter)
+        $trimmedMsg = trim(strtolower($message));
+        $isShortAck = strlen($trimmedMsg) <= 15 && (bool) preg_match('/^(?:ok+|oke+|ok\s*siap|ok\s*gas|done|aman|siap\s*(?:min|gan|bang|bro|bos)?)$/i', $trimmedMsg);
+
+        $isAckKeyword = $isActionKeyword || $isShortAck;
+
+        // Jika tidak ada nomor KD valid dan juga bukan kata kunci konfirmasi, abaikan agar obrolan biasa di grup tidak memicu bot
         if ($targetKd === null && !$isAckKeyword) {
             return response()->json(['status' => true, 'message' => 'Bukan pesan konfirmasi KD']);
         }
 
-        // Cari KD yang saat ini berstatus Siap Panen (readyCount > 0)
+        $maxWorkMinutes = (int) BotSetting::get('max_work_minutes', 30);
+        $spamOverdueInterval = (int) BotSetting::get('spam_overdue_interval', 5);
+
+        // Evaluasi KD yang berstatus Siap Panen (readyCount > 0)
         $groupedByKD = Character::with('gameAccount')->get()->groupBy('kd_number')->sortKeys();
         $kingdoms = Kingdom::all()->keyBy('kd_number');
 
         $acknowledgedKds = [];
 
         foreach ($groupedByKD as $kd => $kChars) {
+            // Jika user menyebut KD spesifik, hanya proses KD tersebut
             if ($targetKd !== null && (int)$kd !== $targetKd) {
                 continue;
             }
@@ -381,11 +399,7 @@ class BotNotificationController extends Controller
             $cooldownHours = $kingdom ? (float) $kingdom->cooldown_hours : 4.0;
             $cooldownMinutes = (int) round($cooldownHours * 60);
 
-            // ANTI-SPAM GUARD: Jika KD ini baru saja dibalas dalam 5 menit terakhir, abaikan agar tidak spam reply beruntun
-            if ($kingdom && $kingdom->replied_at && $kingdom->replied_at->greaterThan(now()->subMinutes(5))) {
-                continue;
-            }
-
+            // Hitung jumlah char yang siap panen
             $readyCount = 0;
             foreach ($kChars as $c) {
                 if (!$c->last_farmed_at || now()->greaterThanOrEqualTo($c->last_farmed_at->copy()->addMinutes($cooldownMinutes))) {
@@ -393,49 +407,66 @@ class BotNotificationController extends Controller
                 }
             }
 
-            if ($readyCount > 0 || $targetKd !== null) {
-                if (!$kingdom) {
-                    $kingdom = Kingdom::firstOrCreate(['kd_number' => $kd]);
+            // ATURAN 1: KD HARUS MEMILIKI CHAR SIAP PANEN (readyCount > 0)!
+            // Jika semua char masih cooldown atau baru selesai panen, JANGAN PERNAH tandai sedang dikerjakan!
+            if ($readyCount === 0) {
+                if ($kingdom && ($kingdom->replied_at || $kingdom->ready_since || ($kingdom->reminder_count ?? 0) > 0)) {
+                    $kingdom->replied_at       = null;
+                    $kingdom->replied_by       = null;
+                    $kingdom->ready_since      = null;
+                    $kingdom->reminder_count   = 0;
+                    $kingdom->save();
                 }
-
-                $kingdom->replied_at = now();
-                $kingdom->replied_by = $name;
-                if (!$kingdom->ready_since) {
-                    $kingdom->ready_since = now();
-                }
-                $kingdom->save();
-
-                $acknowledgedKds[] = [
-                    'kd' => $kd,
-                    'ready_count' => $readyCount ?: $kChars->count(),
-                ];
+                continue;
             }
+
+            // ATURAN 2: TASK SEDANG JALAN (Sudah dibalas & masih dalam tenggat maxWorkMinutes)
+            // Jika KD sudah dibalas joki dalam 30 menit terakhir dan belum overdue, jangan di-acknowledge berulang kali!
+            $isCurrentlyWorking = $kingdom && $kingdom->replied_at && $kingdom->replied_at->greaterThan(now()->subMinutes($maxWorkMinutes));
+            if ($isCurrentlyWorking) {
+                continue;
+            }
+
+            // ATURAN 3: ANTI-SPAM GUARD 5 MENIT
+            if ($kingdom && $kingdom->replied_at && $kingdom->replied_at->greaterThan(now()->subMinutes(5))) {
+                continue;
+            }
+
+            // ATURAN 4: JIKA PESAN TIDAK MENYEBUT NOMOR KD SECARA SPESIFIK:
+            // HANYA proses KD yang memang sedang dipanggil bot / aktif siap panen dalam 2 jam terakhir
+            if ($targetKd === null) {
+                $hasActiveNotif = $kingdom && (
+                    ($kingdom->last_notified_at && $kingdom->last_notified_at->greaterThanOrEqualTo(now()->subHours(2)))
+                    || $kingdom->ready_since !== null
+                );
+                if (!$hasActiveNotif) {
+                    continue;
+                }
+            }
+
+            // Lolos semua kriteria -> Tandai KD sedang dikerjakan oleh joki
+            if (!$kingdom) {
+                $kingdom = Kingdom::firstOrCreate(['kd_number' => $kd]);
+            }
+
+            $kingdom->replied_at = now();
+            $kingdom->replied_by = $name;
+            if (!$kingdom->ready_since) {
+                $kingdom->ready_since = now();
+            }
+            $kingdom->save();
+
+            $acknowledgedKds[] = [
+                'kd' => $kd,
+                'ready_count' => $readyCount,
+            ];
         }
 
-        // Fallback: Jika user balas konfirmasi ("otw", "siap", dll) saat char masih masa jeda / baru saja difarm
-        if (empty($acknowledgedKds) && $isAckKeyword) {
-            $recentKingdom = Kingdom::whereNotNull('last_notified_at')
-                ->orderBy('last_notified_at', 'desc')
-                ->first();
-            if (!$recentKingdom) {
-                $recentKingdom = Kingdom::orderBy('updated_at', 'desc')->first();
-            }
-            if ($recentKingdom && (!$recentKingdom->replied_at || $recentKingdom->replied_at->lessThanOrEqualTo(now()->subMinutes(5)))) {
-                $recentKingdom->replied_at = now();
-                $recentKingdom->replied_by = $name;
-                $recentKingdom->save();
-                $acknowledgedKds[] = [
-                    'kd' => $recentKingdom->kd_number,
-                    'ready_count' => 0,
-                ];
-            }
-        }
+        // CATATAN: Fallback ke recentKingdom (KD jeda/cooldown) DIHAPUS TOTAL!
+        // Jika tidak ada KD yang siap panen atau task sedang jalan, bot diam dan tidak mengirim apa-apa.
 
         // Jika ada KD yang diakui balasan, kirim balasan otomatis ke grup
         if (!empty($acknowledgedKds)) {
-            $maxWorkMinutes = (int) BotSetting::get('max_work_minutes', 30);
-            $spamOverdueInterval = (int) BotSetting::get('spam_overdue_interval', 5);
-
             $kdListStr = implode(', ', array_map(fn($item) => "KD #{$item['kd']}", $acknowledgedKds));
             $replyMsg = "👍 *BALASAN DITERIMA DARI {$name}!* 🎯\n";
             $replyMsg .= "━━━━━━━━━━━━━━━━━\n";
@@ -448,12 +479,18 @@ class BotNotificationController extends Controller
 
             $phoneToSend = (str_contains($sender, '@g.us') && !empty($sender)) ? $sender : ($targetPhone ?: $sender);
             FonnteService::sendMessage($phoneToSend, $replyMsg, null, $inboxid ?: null);
+
+            return response()->json([
+                'status' => true,
+                'message' => 'Webhook berhasil diproses: balasan joki diterima',
+                'acknowledged_kds' => $acknowledgedKds,
+            ]);
         }
 
         return response()->json([
             'status' => true,
-            'message' => 'Webhook berhasil diproses',
-            'acknowledged_kds' => $acknowledgedKds,
+            'message' => 'Tidak ada panggilan panen aktif yang membutuhkan balasan saat ini',
+            'acknowledged_kds' => [],
         ]);
     }
 
