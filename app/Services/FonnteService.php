@@ -108,8 +108,13 @@ class FonnteService
         try {
             $deviceInfo = self::checkDeviceStatus($token);
             $deviceNumber = $deviceInfo['device'] ?? '';
+            $deviceName = trim((string) ($deviceInfo['name'] ?? 'bot rok'));
+            if (strlen($deviceName) < 2) {
+                $deviceName = 'bot rok';
+            }
 
             $payload = [
+                'name' => substr($deviceName, 0, 30),
                 'webhook' => $webhookUrl,
                 'autoread' => 'true',
                 'personal' => 'true',
