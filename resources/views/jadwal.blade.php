@@ -883,8 +883,9 @@
                             </button>
                         </div>
                         <div class="form-text small" style="font-size: 11px;">
-                            Token aman tersimpan di database lokal Laragon Anda.
+                            Token tersimpan aman di database.
                         </div>
+                        <div id="botDeviceHealthBox" class="alert py-2 px-2 mt-2 mb-0 d-none" style="font-size: 11px;"></div>
                     </div>
 
                     <!-- Input Nomor WA Tujuan / ID Grup -->

@@ -156,12 +156,37 @@ class FonnteService
             $json = $response->json();
 
             if ($response->successful() && ($json['status'] ?? false)) {
+                $deviceStatus = strtolower((string) ($json['device_status'] ?? 'disconnect'));
+                $isConnected = in_array($deviceStatus, ['connect', 'connected'], true);
+                $quotaRaw = $json['quota'] ?? null;
+                $isQuotaEmpty = ($quotaRaw !== null && is_numeric($quotaRaw) && (int) $quotaRaw <= 0);
+                $packageName = (string) ($json['package'] ?? '-');
+                $messagesUsed = (int) ($json['messages'] ?? 0);
+                $expiredAt = (string) ($json['expired'] ?? '-');
+
+                if (!$isConnected && $isQuotaEmpty) {
+                    $statusMessage = "WA Bot terputus (disconnect) & kuota pesan paket {$packageName} sudah habis (0 tersisa, {$messagesUsed} terpakai). Scan ulang QR & upgrade/isi kuota di md.fonnte.com!";
+                } elseif (!$isConnected) {
+                    $statusMessage = "Perangkat WA Bot terputus (disconnect). Buka md.fonnte.com -> menu Device -> Scan QR ulang!";
+                } elseif ($isQuotaEmpty) {
+                    $statusMessage = "Kuota pesan Fonnte paket {$packageName} sudah habis (0 tersisa, {$messagesUsed} terpakai, expired/reset: {$expiredAt}). Upgrade paket atau gunakan token Fonnte lain!";
+                } else {
+                    $statusMessage = "Perangkat WA Bot terhubung aktif (Sisa kuota: {$quotaRaw}).";
+                }
+
                 return [
-                    'success' => true,
+                    'success' => $isConnected && !$isQuotaEmpty,
+                    'api_valid' => true,
+                    'connected' => $isConnected,
+                    'quota_empty' => $isQuotaEmpty,
                     'device' => $json['device'] ?? '-',
                     'name' => $json['name'] ?? 'Akun WA',
-                    'status' => $json['device_status'] ?? 'connected',
-                    'quota' => $json['quota'] ?? '-',
+                    'status' => $json['device_status'] ?? 'disconnect',
+                    'quota' => $quotaRaw ?? '-',
+                    'package' => $packageName,
+                    'messages' => $messagesUsed,
+                    'expired' => $expiredAt,
+                    'message' => $statusMessage,
                     'raw' => $json,
                 ];
             }

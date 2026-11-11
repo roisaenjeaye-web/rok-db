@@ -1101,10 +1101,12 @@
                 }
             }
 
-            async function checkDeviceStatusDirect(tokenVal) {
+            async function checkDeviceStatusDirect(tokenVal, showToastOnResult = false) {
                 if (!badgeStatus) return;
+                const healthBox = document.getElementById('botDeviceHealthBox');
                 badgeStatus.className = 'badge bg-warning text-dark';
                 badgeStatus.textContent = 'Mengecek...';
+                if (healthBox) healthBox.classList.add('d-none');
 
                 try {
                     const res = await fetch('/bot/test-connection', {
@@ -1117,12 +1119,45 @@
                         body: JSON.stringify({ fonnte_token: tokenVal })
                     });
                     const data = await res.json();
+                    const quotaStr = (typeof data.quota !== 'undefined' && data.quota !== null) ? data.quota : '-';
+                    const pkgStr = data.package || '-';
+                    const msgCount = (typeof data.messages !== 'undefined') ? data.messages : '-';
+                    const expStr = data.expired || '-';
+
                     if (data.success) {
                         badgeStatus.className = 'badge bg-success';
-                        badgeStatus.innerHTML = `<i class="bi bi-check-circle-fill"></i> Terhubung (${data.name || data.device || 'WA'})`;
+                        badgeStatus.innerHTML = `<i class="bi bi-check-circle-fill"></i> Aktif (${data.name || data.device || 'WA'}) • Kuota: ${quotaStr}`;
+                        if (healthBox) {
+                            healthBox.className = 'alert alert-success py-2 px-2 mt-2 mb-0';
+                            healthBox.innerHTML = `✅ <b>WA Terhubung (${data.device || '-'})</b> | Paket: <b>${pkgStr}</b> | Sisa Kuota: <b>${quotaStr}</b> | Terpakai: ${msgCount} | Exp: ${expStr}`;
+                        }
+                        if (showToastOnResult) showSatsetToast(`✅ Perangkat WA terhubung aktif (Sisa kuota: ${quotaStr})`, 'success');
+                    } else if (data.api_valid) {
+                        const isDisconn = data.connected === false;
+                        const isQuotaZero = data.quota_empty === true;
+                        badgeStatus.className = isDisconn ? 'badge bg-danger' : 'badge bg-warning text-dark';
+
+                        if (isDisconn && isQuotaZero) {
+                            badgeStatus.innerHTML = `<i class="bi bi-x-octagon-fill"></i> Disconnect & Kuota Habis (0)`;
+                        } else if (isDisconn) {
+                            badgeStatus.innerHTML = `<i class="bi bi-wifi-off"></i> Terputus (Disconnect)`;
+                        } else {
+                            badgeStatus.innerHTML = `<i class="bi bi-exclamation-triangle-fill"></i> Kuota Habis (0)`;
+                        }
+
+                        if (healthBox) {
+                            healthBox.className = 'alert alert-danger py-2 px-2 mt-2 mb-0';
+                            healthBox.innerHTML = `⚠️ <b>Bot Tidak Bisa Kirim Pesan!</b><br>${data.message || 'Periksa koneksi WA atau kuota di Fonnte.'}<br><span class="text-muted">Device: ${data.device || '-'} | Status: <b>${data.status || '-'}</b> | Paket: <b>${pkgStr}</b> | Sisa Kuota: <b>${quotaStr}</b> | Terpakai: ${msgCount} | Exp: ${expStr}</span>`;
+                        }
+                        if (showToastOnResult) showSatsetToast(`⚠️ ${data.message || 'Bot bermasalah!'}`, 'danger');
                     } else {
                         badgeStatus.className = 'badge bg-danger';
-                        badgeStatus.textContent = 'Belum Terhubung';
+                        badgeStatus.textContent = 'Token Salah / Belum Terhubung';
+                        if (healthBox) {
+                            healthBox.className = 'alert alert-danger py-2 px-2 mt-2 mb-0';
+                            healthBox.textContent = `❌ ${data.message || 'Token Fonnte tidak valid atau perangkat belum terhubung.'}`;
+                        }
+                        if (showToastOnResult) showSatsetToast(`❌ ${data.message || 'Token tidak valid'}`, 'danger');
                     }
                 } catch (e) {
                     badgeStatus.className = 'badge bg-secondary';
@@ -1202,7 +1237,7 @@
                         showSatsetToast('Silakan isi Token Fonnte terlebih dahulu!', 'danger');
                         return;
                     }
-                    checkDeviceStatusDirect(tokenVal);
+                    checkDeviceStatusDirect(tokenVal, true);
                 });
             }
 
@@ -1340,7 +1375,7 @@
                     }
                 });
                 const data = await res.json();
-                if (data.success && data.notified_count > 0) {
+                if (data.notified_count > 0) {
                     data.notified_kds.forEach(item => {
                         if (item.type === 'spam_10m_unreplied' || item.type === 'spam_5m_unreplied') {
                             showSatsetToast(`⚠️ <b>[Bot WA Fonnte]</b> Spam 5 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (${item.ready_count} char) karena belum dibalas!`, 'warning');
@@ -1350,6 +1385,12 @@
                             showSatsetToast(`🤖 <b>[Bot WA Fonnte]</b> Pengingat KD #${item.kd} (${item.ready_count} char siap) otomatis terkirim ke WhatsApp!`, 'success');
                         }
                     });
+                } else if (!data.success && data.errors && data.errors.length > 0 && !window._satsetBotErrShown) {
+                    window._satsetBotErrShown = true;
+                    const errDetail = (data.device_health && data.device_health.message)
+                        ? data.device_health.message
+                        : (data.errors[0].error || 'Gagal mengirim pesan WA via Fonnte.');
+                    showSatsetToast(`⚠️ <b>[Bot WA Mati]</b> ${errDetail}`, 'danger');
                 }
             } catch (e) {
                 // Background check, abaikan jika offline

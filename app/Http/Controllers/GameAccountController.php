@@ -443,6 +443,8 @@ class GameAccountController extends Controller
             return back()->with('error', $errMsg);
         }
 
+        $waRes = null;
+
         // Reset tracking spam & pengingat untuk KD ini karena panen sudah selesai (diceklis)
         if ($kingdom) {
             $kingdom->replied_at = null;
@@ -455,7 +457,7 @@ class GameAccountController extends Controller
             $kingdom->save();
 
             // Kirim notifikasi panen selesai ke grup WA jika bot aktif
-            $isAuto = (bool) BotSetting::get('is_auto_notify', true);
+            $isAuto = BotSetting::getBoolean('is_auto_notify', true);
             $phone = BotSetting::get('target_phone');
             if ($isAuto && !empty($phone)) {
                 $jamSelesai = now()->setTimezone('Asia/Jakarta')->addMinutes($cooldownMinutes)->format('H:i') . ' WIB';
@@ -472,7 +474,7 @@ class GameAccountController extends Controller
                 $selesaiMsg .= "🔗 *Buka Dashboard:* {$dashUrl}\n";
                 $selesaiMsg .= "_Spam pengingat resmi dinonaktifkan. Terima kasih tim!_ ✨";
 
-                FonnteService::sendMessage($phone, $selesaiMsg);
+                $waRes = FonnteService::sendMessage($phone, $selesaiMsg);
             }
         }
 
@@ -484,7 +486,9 @@ class GameAccountController extends Controller
                 'count' => $result['count'],
                 'total_kd' => $result['stat']->farm_count,
                 'worker' => $worker,
-                'cooldown_hours' => $cooldownHours
+                'cooldown_hours' => $cooldownHours,
+                'wa_sent' => $waRes ? ($waRes['success'] ?? false) : null,
+                'wa_error' => ($waRes && !($waRes['success'] ?? false)) ? ($waRes['message'] ?? 'Gagal kirim notif WA') : null,
             ]);
         }
 

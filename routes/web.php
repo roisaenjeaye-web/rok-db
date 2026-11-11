@@ -21,7 +21,7 @@ Route::get('/ping-version', function () {
 });
 
 Route::get('/api/bot/debug', function () {
-    $isAuto = (bool) \App\Models\BotSetting::get('is_auto_notify', true);
+    $isAuto = \App\Models\BotSetting::getBoolean('is_auto_notify', true);
     $phone = \App\Models\BotSetting::get('target_phone');
     $token = \App\Models\BotSetting::get('fonnte_token');
 
@@ -72,6 +72,7 @@ Route::get('/api/bot/debug', function () {
         'is_auto' => $isAuto,
         'has_phone' => !empty($phone),
         'has_token' => !empty($token),
+        'fonnte_device' => \App\Services\FonnteService::checkDeviceStatus($token),
         'diagnostics' => $diagnostics,
     ]);
 });

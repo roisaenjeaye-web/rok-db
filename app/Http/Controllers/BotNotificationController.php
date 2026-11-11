@@ -536,6 +536,8 @@ class BotNotificationController extends Controller
         $spamOverdueInterval   = (int) BotSetting::get('spam_overdue_interval', 5);
 
         $notifiedKds = [];
+        $sendErrors = [];
+        $deviceHealth = null;
 
         foreach ($groupedByKD as $kd => $kChars) {
             // Cek apakah KD ini secara spesifik dimatikan/dijeda oleh admin (Mode Tidur KD)
@@ -649,6 +651,16 @@ class BotNotificationController extends Controller
                             'type'           => $isSpam ? "spam_{$spamUnrepliedInterval}m_unreplied" : 'initial_ready',
                             'reminder_count' => $kingdom->reminder_count,
                         ];
+                    } else {
+                        $errReason = $res['message'] ?? 'Gagal mengirim pesan via Fonnte';
+                        $sendErrors[] = ['kd' => $kd, 'error' => $errReason];
+                        Log::warning("Bot Auto-Notify gagal kirim KD #{$kd}: {$errReason}");
+                        if ($deviceHealth === null) {
+                            $deviceHealth = FonnteService::checkDeviceStatus($token);
+                        }
+                        if (!($deviceHealth['success'] ?? false)) {
+                            break;
+                        }
                     }
                 }
             }
@@ -678,6 +690,16 @@ class BotNotificationController extends Controller
                                 'type'           => "spam_{$spamOverdueInterval}m_overdue",
                                 'reminder_count' => $kingdom->reminder_count,
                             ];
+                        } else {
+                            $errReason = $res['message'] ?? 'Gagal mengirim pesan via Fonnte';
+                            $sendErrors[] = ['kd' => $kd, 'error' => $errReason];
+                            Log::warning("Bot Auto-Notify overdue gagal kirim KD #{$kd}: {$errReason}");
+                            if ($deviceHealth === null) {
+                                $deviceHealth = FonnteService::checkDeviceStatus($token);
+                            }
+                            if (!($deviceHealth['success'] ?? false)) {
+                                break;
+                            }
                         }
                     }
                 }
@@ -686,10 +708,12 @@ class BotNotificationController extends Controller
         }
 
         return [
-            'success' => true,
+            'success' => empty($sendErrors),
             'auto_enabled' => true,
             'notified_count' => count($notifiedKds),
             'notified_kds' => $notifiedKds,
+            'errors' => $sendErrors,
+            'device_health' => $deviceHealth,
         ];
     }
 
