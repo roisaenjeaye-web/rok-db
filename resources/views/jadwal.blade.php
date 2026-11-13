@@ -942,14 +942,14 @@
                                 1. INTERVAL SPAM SIAP PANEN (BELUM DIBALAS):
                             </label>
                             <div class="input-group input-group-sm mb-1">
-                                <input type="number" id="inputSpamUnrepliedInterval" class="form-control text-center fw-bold text-danger" value="15" min="1" max="1440">
+                                <input type="number" id="inputSpamUnrepliedInterval" class="form-control text-center fw-bold text-danger" value="{{ $spamUnrepliedInterval ?? 30 }}" min="1" max="1440">
                                 <span class="input-group-text fw-bold">Menit Sekali</span>
                             </div>
                             <div class="d-flex gap-1 flex-wrap mb-1">
                                 <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-unreplied" data-val="10">10m</button>
-                                <button type="button" class="btn btn-xs btn-outline-primary active fw-bold btn-quick-unreplied" data-val="15">15m (Standar)</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-unreplied" data-val="15">15m</button>
                                 <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-unreplied" data-val="20">20m</button>
-                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-unreplied" data-val="30">30m</button>
+                                <button type="button" class="btn btn-xs btn-outline-primary active fw-bold btn-quick-unreplied" data-val="30">30m (Standar)</button>
                             </div>
                             <div class="text-muted" style="font-size: 10px;">
                                 Jeda spam bot jika KD sudah siap panen tetapi belum ada yang membalas chat di grup WA.
@@ -983,13 +983,14 @@
                                 3. INTERVAL SPAM OVERDUE (JIKA LEWAT BATAS WAKTU):
                             </label>
                             <div class="input-group input-group-sm mb-1">
-                                <input type="number" id="inputSpamOverdueInterval" class="form-control text-center fw-bold text-warning" value="5" min="1" max="1440">
+                                <input type="number" id="inputSpamOverdueInterval" class="form-control text-center fw-bold text-warning" value="{{ $spamOverdueInterval ?? 15 }}" min="1" max="1440">
                                 <span class="input-group-text fw-bold">Menit Sekali</span>
                             </div>
                             <div class="d-flex gap-1 flex-wrap mb-1">
-                                <button type="button" class="btn btn-xs btn-outline-primary active fw-bold btn-quick-overdue" data-val="5">5m (Standar)</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-overdue" data-val="5">5m</button>
                                 <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-overdue" data-val="10">10m</button>
-                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-overdue" data-val="15">15m</button>
+                                <button type="button" class="btn btn-xs btn-outline-primary active fw-bold btn-quick-overdue" data-val="15">15m (Standar)</button>
+                                <button type="button" class="btn btn-xs btn-outline-secondary btn-quick-overdue" data-val="30">30m</button>
                             </div>
                             <div class="text-muted" style="font-size: 10px;">
                                 Jika batas waktu ngerjain habis tapi belum diceklis panen di web, bot akan spam tiap berapa menit.
@@ -1003,9 +1004,9 @@
                             <i class="bi bi-shield-check text-success me-1 fs-6"></i> Ringkasan Alur Kerja Bot:
                         </div>
                         <ul class="mb-0 ps-3" style="font-size: 11px;">
-                            <li><b>Belum Dibalas:</b> Spam dikirim setiap <b>15 menit sekali</b> (dapat diatur).</li>
-                            <li><b>Balas OTW / Siap:</b> Diberi toleransi waktu ngerjain (misal <b>30 menit</b>) tanpa spam.</li>
-                            <li><b>Overdue:</b> Jika lewat batas waktu belum selesai di web, bot otomatis <b>spam tiap 5 menit sekali</b>.</li>
+                            <li><b>Belum Dibalas:</b> Spam dikirim setiap <b>{{ $spamUnrepliedInterval ?? 30 }} menit sekali</b> (dapat diatur).</li>
+                            <li><b>Balas OTW / Siap:</b> Diberi toleransi waktu ngerjain (misal <b>{{ $maxWorkMinutes ?? 30 }} menit</b>) tanpa spam.</li>
+                            <li><b>Overdue:</b> Jika lewat batas waktu belum selesai di web, bot otomatis <b>spam tiap {{ $spamOverdueInterval ?? 15 }} menit sekali</b>.</li>
                             <li><b>Mode Tidur:</b> Matikan CD di bar atas atau saklar di atas saat tim istirahat malam (Hanya Admin).</li>
                         </ul>
                     </div>

@@ -390,9 +390,9 @@ class GameAccountController extends Controller
         $activeWorker = $this->getActiveWorker(request());
         $isAdmin = auth()->check() ? auth()->user()->isAdmin() : false;
         $isAutoNotify = \App\Models\BotSetting::getBoolean('is_auto_notify', true);
-        $spamUnrepliedInterval = (int) \App\Models\BotSetting::get('spam_unreplied_interval', 15);
+        $spamUnrepliedInterval = (int) \App\Models\BotSetting::get('spam_unreplied_interval', 30);
         $maxWorkMinutes = (int) \App\Models\BotSetting::get('max_work_minutes', 30);
-        $spamOverdueInterval = (int) \App\Models\BotSetting::get('spam_overdue_interval', 5);
+        $spamOverdueInterval = (int) \App\Models\BotSetting::get('spam_overdue_interval', 15);
 
         return view('jadwal', compact(
             'groupedByKD', 'kdStats', 'knownWorkers', 'activeWorker', 'kingdoms', 'isAdmin',

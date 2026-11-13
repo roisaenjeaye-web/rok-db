@@ -30,9 +30,9 @@ class BotNotificationController extends Controller
             'fonnte_token' => BotSetting::get('fonnte_token', ''),
             'target_phone' => BotSetting::get('target_phone', ''),
             'is_auto_notify' => BotSetting::getBoolean('is_auto_notify', true),
-            'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 15),
+            'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 30),
             'max_work_minutes' => (int) BotSetting::get('max_work_minutes', 30),
-            'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 5),
+            'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 15),
             'webhook_url' => $this->getWebhookUrl(),
             'is_admin' => auth()->check() && auth()->user()->isAdmin(),
         ]);
@@ -115,9 +115,9 @@ class BotNotificationController extends Controller
                 'fonnte_token' => BotSetting::get('fonnte_token', ''),
                 'target_phone' => BotSetting::get('target_phone', ''),
                 'is_auto_notify' => BotSetting::getBoolean('is_auto_notify', true),
-                'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 15),
+                'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 30),
                 'max_work_minutes' => (int) BotSetting::get('max_work_minutes', 30),
-                'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 5),
+                'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 15),
                 'webhook_url' => $webhookUrl,
             ]
         ]);
@@ -241,7 +241,7 @@ class BotNotificationController extends Controller
         $kingdom->save();
 
         $maxWorkMinutes = (int) BotSetting::get('max_work_minutes', 30);
-        $spamOverdueInterval = (int) BotSetting::get('spam_overdue_interval', 5);
+        $spamOverdueInterval = (int) BotSetting::get('spam_overdue_interval', 15);
 
         $targetPhone = BotSetting::get('target_phone');
         if (!empty($targetPhone)) {
@@ -381,7 +381,7 @@ class BotNotificationController extends Controller
         }
 
         $maxWorkMinutes = (int) BotSetting::get('max_work_minutes', 30);
-        $spamOverdueInterval = (int) BotSetting::get('spam_overdue_interval', 5);
+        $spamOverdueInterval = (int) BotSetting::get('spam_overdue_interval', 15);
 
         // Evaluasi KD yang berstatus Siap Panen (readyCount > 0)
         $groupedByKD = Character::with('gameAccount')->get()->groupBy('kd_number')->sortKeys();
@@ -531,9 +531,9 @@ class BotNotificationController extends Controller
         $groupedByKD = Character::with('gameAccount')->get()->groupBy('kd_number')->sortKeys();
         $kingdoms = Kingdom::all()->keyBy('kd_number');
 
-        $spamUnrepliedInterval = (int) BotSetting::get('spam_unreplied_interval', 15);
+        $spamUnrepliedInterval = (int) BotSetting::get('spam_unreplied_interval', 30);
         $maxWorkMinutes        = (int) BotSetting::get('max_work_minutes', 30);
-        $spamOverdueInterval   = (int) BotSetting::get('spam_overdue_interval', 5);
+        $spamOverdueInterval   = (int) BotSetting::get('spam_overdue_interval', 15);
 
         $notifiedKds = [];
         $sendErrors = [];
@@ -783,7 +783,7 @@ class BotNotificationController extends Controller
     {
         $currentUrl = $this->getDashboardUrl();
         $cdStr = ((float)$cooldownHours == (int)$cooldownHours) ? (int)$cooldownHours : $cooldownHours;
-        $spamUnrepliedInterval = (int) BotSetting::get('spam_unreplied_interval', 15);
+        $spamUnrepliedInterval = (int) BotSetting::get('spam_unreplied_interval', 30);
 
         if ($readyCount > 0 || !$maxCooldownEnd || now()->greaterThanOrEqualTo($maxCooldownEnd)) {
             $text = "🚨 *PANGGILAN PANEN FARM RoK (AUTO BOT)* 🚨\n";
