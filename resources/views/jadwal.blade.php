@@ -1060,136 +1060,7 @@
 (function() {
     'use strict';
 
-    // 1. Filter Buttons & Anti-Autofill Search
-    const filterBtns = document.querySelectorAll('.btn-filter-kd');
-    const searchInput = document.getElementById('inputSearchKD');
-    const clearSearchBtn = document.getElementById('btnClearSearchKD');
-    const cards = document.querySelectorAll('.kd-card-wrapper');
-    const emptyState = document.getElementById('kd-filter-empty');
-    const emptyIcon = document.getElementById('empty-state-icon');
-    const emptyTitle = document.getElementById('empty-state-title');
-    const emptyDesc = document.getElementById('empty-state-desc');
-    const resetFilterBtn = document.getElementById('btnResetFilterToAll');
-
-    let activeFilter = 'all';
-
-    // Bersihkan otomatis jika browser mengautofill email/teks non-KD
-    function sanitizeSearchInput() {
-        if (!searchInput) return;
-        const val = (searchInput.value || '').trim();
-        if (val.includes('@') || val.includes('.com') || val.includes('.net') || val.includes('.org') || (isNaN(val.replace('#', '')) && val.length > 5)) {
-            searchInput.value = '';
-            if (clearSearchBtn) clearSearchBtn.classList.add('d-none');
-            applyFilters();
-        }
-    }
-    sanitizeSearchInput();
-    [50, 150, 300, 600, 1200, 2000].forEach(ms => setTimeout(sanitizeSearchInput, ms));
-    if (searchInput) {
-        searchInput.addEventListener('change', sanitizeSearchInput);
-    }
-
-    function updateFilterButtonStyles() {
-        filterBtns.forEach(btn => {
-            const filter = btn.getAttribute('data-filter');
-            btn.classList.remove('active', 'btn-dark', 'btn-danger', 'btn-secondary', 'btn-outline-dark', 'btn-outline-danger', 'btn-outline-secondary');
-
-            if (filter === activeFilter) {
-                btn.classList.add('active');
-                if (filter === 'all') btn.classList.add('btn-dark');
-                else if (filter === 'ready') btn.classList.add('btn-danger');
-                else if (filter === 'cooldown') btn.classList.add('btn-secondary');
-            } else {
-                if (filter === 'all') btn.classList.add('btn-outline-secondary');
-                else if (filter === 'ready') btn.classList.add('btn-outline-danger');
-                else if (filter === 'cooldown') btn.classList.add('btn-outline-secondary');
-            }
-        });
-    }
-
-    function applyFilters() {
-        let visibleCount = 0;
-        const currentSearch = searchInput ? searchInput.value.trim().toLowerCase().replace('#', '') : '';
-
-        if (clearSearchBtn) {
-            clearSearchBtn.classList.toggle('d-none', currentSearch.length === 0);
-        }
-
-        cards.forEach(card => {
-            const kdNum = (card.getAttribute('data-kd') || '').toLowerCase();
-            const hasReady = card.getAttribute('data-has-ready') === 'true';
-
-            let matchFilter = true;
-            if (activeFilter === 'ready') matchFilter = hasReady;
-            else if (activeFilter === 'cooldown') matchFilter = !hasReady;
-
-            let matchSearch = true;
-            if (currentSearch) matchSearch = kdNum.includes(currentSearch);
-
-            if (matchFilter && matchSearch) {
-                card.classList.remove('d-none');
-                visibleCount++;
-            } else {
-                card.classList.add('d-none');
-            }
-        });
-
-        if (emptyState) {
-            if (visibleCount === 0) {
-                emptyState.classList.remove('d-none');
-                if (currentSearch) {
-                    if (emptyIcon) emptyIcon.className = 'bi bi-search fs-1 text-secondary opacity-75';
-                    if (emptyTitle) emptyTitle.innerText = `Tidak ada Kingdom yang cocok dengan "${currentSearch}"`;
-                    if (emptyDesc) emptyDesc.innerText = 'Pastikan nomor Kingdom yang dicari benar (contoh: 2359 atau 3868).';
-                } else if (activeFilter === 'ready') {
-                    if (emptyIcon) emptyIcon.className = 'bi bi-clock-history fs-1 text-warning opacity-75';
-                    if (emptyTitle) emptyTitle.innerText = 'Semua Kingdom Sedang Masa Jeda (Cooldown)';
-                    if (emptyDesc) emptyDesc.innerText = 'Belum ada akun farm yang siap panen saat ini. Silakan klik tombol di bawah untuk melihat KD yang sedang cooldown atau semua KD.';
-                } else if (activeFilter === 'cooldown') {
-                    if (emptyIcon) emptyIcon.className = 'bi bi-check-circle fs-1 text-success opacity-75';
-                    if (emptyTitle) emptyTitle.innerText = 'Tidak Ada Kingdom yang Sedang Cooldown';
-                    if (emptyDesc) emptyDesc.innerText = 'Semua Kingdom sudah siap panen!';
-                }
-            } else {
-                emptyState.classList.add('d-none');
-            }
-        }
-    }
-
-    filterBtns.forEach(btn => {
-        btn.addEventListener('click', function() {
-            activeFilter = this.getAttribute('data-filter') || 'all';
-            updateFilterButtonStyles();
-            applyFilters();
-        });
-    });
-
-    if (searchInput) {
-        searchInput.addEventListener('input', applyFilters);
-    }
-
-    if (clearSearchBtn) {
-        clearSearchBtn.addEventListener('click', function() {
-            if (searchInput) searchInput.value = '';
-            clearSearchBtn.classList.add('d-none');
-            applyFilters();
-        });
-    }
-
-    if (resetFilterBtn) {
-        resetFilterBtn.addEventListener('click', function() {
-            if (searchInput) searchInput.value = '';
-            if (clearSearchBtn) clearSearchBtn.classList.add('d-none');
-            activeFilter = 'all';
-            updateFilterButtonStyles();
-            applyFilters();
-        });
-    }
-
-    updateFilterButtonStyles();
-    applyFilters();
-
-    // 3. AJAX Handler untuk tombol Get Ready (Force Reset Cooldown KD)
+    // 1. AJAX Handler untuk tombol Get Ready (Force Reset Cooldown KD)
     document.querySelectorAll('form.form-force-ready').forEach(form => {
         form.addEventListener('submit', async function(e) {
             if (form.dataset.submitting === 'true') {
@@ -1234,7 +1105,7 @@
         });
     });
 
-    // 4. Handler Cepat Menit & AJAX Submit untuk Tambah Waktu Jeda (+CD)
+    // 2. Handler Cepat Menit & AJAX Submit untuk Tambah Waktu Jeda (+CD)
     document.addEventListener('click', function(e) {
         const quickBtn = e.target.closest('.btn-quick-minute');
         if (!quickBtn) return;
@@ -1296,7 +1167,7 @@
         });
     });
 
-    // 5. AJAX Handler Toggle Cepat Bot CD (Mode Tidur) - Admin Only
+    // 3. AJAX Handler Toggle Cepat Bot CD (Mode Tidur) - Admin & Operator
     const btnToggleBotCD = document.getElementById('btnToggleBotCD');
     if (btnToggleBotCD) {
         btnToggleBotCD.addEventListener('click', async function() {

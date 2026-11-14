@@ -343,7 +343,7 @@ class GameAccountController extends Controller
     public function jadwal()
     {
         // 1. Warm in-memory cache BotSetting (1 query instan untuk seluruh setting)
-        \App\Models\BotSetting::warm();
+        BotSetting::warm();
 
         // 2. Query characters & gameAccount (Eager loaded)
         //    + order:id agar urutan char konsisten & tidak ada query tersembunyi
@@ -380,7 +380,7 @@ class GameAccountController extends Controller
         // 5. Ambil semua BotSetting KD mute sekali (hindari getBoolean per-KD di blade = N query)
         $kdMuteMap = [];
         foreach ($charKds as $mKd) {
-            $kdMuteMap[$mKd] = \App\Models\BotSetting::getBoolean("kd_mute_{$mKd}", false);
+            $kdMuteMap[$mKd] = BotSetting::getBoolean("kd_mute_{$mKd}", false);
         }
 
         // 6. Worker & statistik: hanya yang NON-admin, di-group sekali (dulu difilter di PHP per KD)
@@ -389,12 +389,12 @@ class GameAccountController extends Controller
         $knownWorkers = $this->getKnownWorkers();
         $activeWorker = $this->getActiveWorker(request());
         $isAdmin = auth()->check() ? auth()->user()->isAdmin() : false;
-        $isAutoNotify = \App\Models\BotSetting::getBoolean('is_auto_notify', true);
-        $spamUnrepliedInterval = (int) \App\Models\BotSetting::get('spam_unreplied_interval', 30);
-        $maxWorkMinutes = (int) \App\Models\BotSetting::get('max_work_minutes', 30);
-        $spamOverdueInterval = (int) \App\Models\BotSetting::get('spam_overdue_interval', 15);
-        $quietHoursEnabled = \App\Models\BotSetting::getBoolean('quiet_hours_enabled', true);
-        $isQuietHours = \App\Http\Controllers\BotNotificationController::isQuietHours();
+        $isAutoNotify = BotSetting::getBoolean('is_auto_notify', true);
+        $spamUnrepliedInterval = (int) BotSetting::get('spam_unreplied_interval', 30);
+        $maxWorkMinutes = (int) BotSetting::get('max_work_minutes', 30);
+        $spamOverdueInterval = (int) BotSetting::get('spam_overdue_interval', 15);
+        $quietHoursEnabled = BotSetting::getBoolean('quiet_hours_enabled', true);
+        $isQuietHours = BotNotificationController::isQuietHours();
 
         return view('jadwal', compact(
             'groupedByKD', 'kdStats', 'knownWorkers', 'activeWorker', 'kingdoms', 'isAdmin',
@@ -517,7 +517,7 @@ class GameAccountController extends Controller
         // Pengaturan Mute/Tidur Khusus KD Ini (Admin Only)
         if (auth()->check() && auth()->user()->isAdmin()) {
             $isMuted = $request->boolean('is_kd_muted');
-            \App\Models\BotSetting::set("kd_mute_{$kd}", $isMuted ? '1' : '0');
+            BotSetting::set("kd_mute_{$kd}", $isMuted ? '1' : '0');
         }
 
         $msg = "⏱️ Waktu jeda macul KD #{$kd} berhasil diatur menjadi {$cooldownHours} Jam sekali!";
@@ -541,9 +541,9 @@ class GameAccountController extends Controller
             abort(401, 'Silakan login terlebih dahulu.');
         }
 
-        $current = \App\Models\BotSetting::getBoolean("kd_mute_{$kd}", false);
+        $current = BotSetting::getBoolean("kd_mute_{$kd}", false);
         $newStatus = !$current;
-        \App\Models\BotSetting::set("kd_mute_{$kd}", $newStatus ? '1' : '0');
+        BotSetting::set("kd_mute_{$kd}", $newStatus ? '1' : '0');
 
         $user = auth()->user()->name ?? 'Operator';
         $role = auth()->user()->isAdmin() ? 'Admin' : 'Operator';
@@ -595,7 +595,7 @@ class GameAccountController extends Controller
             }
 
             $cdStr = ((float)$cooldownHours == (int)$cooldownHours) ? (int)$cooldownHours : $cooldownHours;
-            $currentUrl = \App\Http\Controllers\BotNotificationController::resolveDashboardUrl();
+            $currentUrl = BotNotificationController::resolveDashboardUrl();
 
             if ($readyCount > 0 || !$maxCooldownEnd || now()->greaterThanOrEqualTo($maxCooldownEnd)) {
                 $text = "🚨 *PANGGILAN PANEN FARM RoK* 🚨\n";
@@ -632,7 +632,7 @@ class GameAccountController extends Controller
             // Rekap Semua KD
             $groupedByKD = Character::with('gameAccount')->get()->groupBy('kd_number')->sortKeys();
             $kingdoms = Kingdom::all()->keyBy('kd_number');
-            $currentUrl = \App\Http\Controllers\BotNotificationController::resolveDashboardUrl();
+            $currentUrl = BotNotificationController::resolveDashboardUrl();
 
             $readyList = [];
             $cooldownList = [];

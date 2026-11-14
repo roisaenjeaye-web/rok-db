@@ -11,7 +11,6 @@ use Illuminate\Support\Facades\Log;
 
 class BotNotificationController extends Controller
 {
-    // Ambil setting bot
     /**
      * Guard: pastikan yang akses adalah admin
      */
@@ -46,11 +45,12 @@ class BotNotificationController extends Controller
         }
     }
 
-    // Ambil setting bot
-    public function getSettings()
+    /**
+     * Helper untuk mengambil seluruh pengaturan bot saat ini
+     */
+    private function currentSettings(): array
     {
-        return response()->json([
-            'success' => true,
+        return [
             'fonnte_token' => BotSetting::get('fonnte_token', ''),
             'target_phone' => BotSetting::get('target_phone', ''),
             'is_auto_notify' => BotSetting::getBoolean('is_auto_notify', true),
@@ -62,8 +62,17 @@ class BotNotificationController extends Controller
             'quiet_hours_end' => (int) BotSetting::get('quiet_hours_end', 8),
             'is_quiet_hours' => self::isQuietHours(),
             'webhook_url' => $this->getWebhookUrl(),
-            'is_admin' => auth()->check() && auth()->user()->isAdmin(),
-        ]);
+        ];
+    }
+
+    // Ambil setting bot
+    public function getSettings()
+    {
+        return response()->json(array_merge(
+            ['success' => true],
+            $this->currentSettings(),
+            ['is_admin' => auth()->check() && auth()->user()->isAdmin()]
+        ));
     }
 
     // Toggle Cepat Matikan / Aktifkan Bot CD (Mode Tidur) - Admin & Operator
@@ -79,7 +88,6 @@ class BotNotificationController extends Controller
 
         $actorName = auth()->user()->name ?? 'Operator';
         $roleName  = (auth()->user()->isAdmin()) ? 'Admin' : 'Operator';
-        $statusText = $newStatus ? 'DIAKTIFKAN KEMBALI' : 'DINONAKTIFKAN (Mode Tidur)';
         $msg = $newStatus
             ? "🔔 Bot Pengingat CD berhasil diaktifkan kembali oleh {$roleName} {$actorName}!"
             : "😴 Bot Pengingat CD dimatikan (Mode Tidur) oleh {$roleName} {$actorName}! Pengingat & spam dinonaktifkan.";
@@ -157,19 +165,7 @@ class BotNotificationController extends Controller
         return response()->json([
             'success' => true,
             'message' => 'Pengaturan Bot WhatsApp Fonnte berhasil disimpan dan Webhook otomatis disinkronkan!',
-            'settings' => [
-                'fonnte_token' => BotSetting::get('fonnte_token', ''),
-                'target_phone' => BotSetting::get('target_phone', ''),
-                'is_auto_notify' => BotSetting::getBoolean('is_auto_notify', true),
-                'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 30),
-                'max_work_minutes' => (int) BotSetting::get('max_work_minutes', 30),
-                'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 15),
-                'quiet_hours_enabled' => BotSetting::getBoolean('quiet_hours_enabled', true),
-                'quiet_hours_start' => (int) BotSetting::get('quiet_hours_start', 0),
-                'quiet_hours_end' => (int) BotSetting::get('quiet_hours_end', 8),
-                'is_quiet_hours' => self::isQuietHours(),
-                'webhook_url' => $webhookUrl,
-            ]
+            'settings' => $this->currentSettings(),
         ]);
     }
 
@@ -204,7 +200,7 @@ class BotNotificationController extends Controller
         $nowStr = now()->setTimezone('Asia/Jakarta')->format('d M Y, H:i') . ' WIB';
         $testMsg = "🤖 *TES BOT WHATSAPP RoK JOKI BERHASIL!* 🚀\n";
         $testMsg .= "━━━━━━━━━━━━━━━━━\n";
-        $testMsg .= "✅ Sistem Bot Fonnte berhasil terhubung & siap mengirim pengingat panen otomatis serta sistem anti-lupa (spam 5m)!\n";
+        $testMsg .= "✅ Sistem Bot Fonnte berhasil terhubung & siap mengirim pengingat panen otomatis serta sistem anti-lupa (spam pengingat)!\n";
         $testMsg .= "📅 Waktu: {$nowStr}\n";
         $testMsg .= "@all\n";
         $testMsg .= "━━━━━━━━━━━━━━━━━\n";
@@ -555,16 +551,6 @@ class BotNotificationController extends Controller
         return response()->json($result);
     }
 
-    /**
-     * Core Engine: Mengevaluasi status semua KD dan mengirim notifikasi / spam
-     *
-     * Alur yang benar:
-     *  1. KD siap panen dan last_notified_at null -> kirim notif awal SEGERA
-     *  2. Belum dibalas dan >= 4-5 menit sejak notif terakhir -> spam 5 menit
-     *  3. Sudah dibalas dan >= 30 menit belum diceklis dan >= 5 menit sejak notif terakhir -> spam 5 menit
-     *  4. Guard 2 menit: cegah double-fire dari concurrent heartbeat browser
-     *  5. Deteksi siklus baru: jika char baru saja di-farm, reset state notifikasi
-     */
     /**
      * Core Engine: Mengevaluasi status semua KD dan mengirim notifikasi / spam gabungan (Single Chat).
      *
