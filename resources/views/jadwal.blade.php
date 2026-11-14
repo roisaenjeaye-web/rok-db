@@ -124,16 +124,10 @@
                 </button>
             </div>
             <div class="d-flex align-items-center gap-1 ms-auto flex-wrap">
-                @if($isAdmin)
-                    <button type="button" class="btn btn-sm {{ $isAutoNotify ? 'btn-success' : 'btn-dark' }} rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnToggleBotCD" data-active="{{ $isAutoNotify ? '1' : '0' }}" title="{{ $isAutoNotify ? 'Klik untuk Matikan CD (Mode Tidur) — Bot tidak akan spam WA' : 'Klik untuk Aktifkan CD Kembali' }}" style="font-size: 11px;">
-                        <i class="bi {{ $isAutoNotify ? 'bi-bell-fill text-warning' : 'bi-moon-stars-fill text-warning' }}"></i>
-                        <span>{{ $isAutoNotify ? 'CD: AKTIF' : 'CD: TIDUR' }}</span>
-                    </button>
-                @else
-                    <span class="badge {{ $isAutoNotify ? 'bg-success-subtle text-success border border-success-subtle' : 'bg-secondary-subtle text-muted border border-secondary-subtle' }} rounded-pill py-1 px-2 d-inline-flex align-items-center gap-1" style="font-size: 11px;" title="{{ $isAutoNotify ? 'Bot CD Aktif' : 'Bot CD sedang dimatikan oleh Admin (Mode Tidur)' }}">
-                        <i class="bi {{ $isAutoNotify ? 'bi-bell-fill' : 'bi-moon-stars-fill' }}"></i> {{ $isAutoNotify ? 'CD Aktif' : 'Mode Tidur' }}
-                    </span>
-                @endif
+                <button type="button" class="btn btn-sm {{ $isAutoNotify ? 'btn-success' : 'btn-dark' }} rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnToggleBotCD" data-active="{{ $isAutoNotify ? '1' : '0' }}" title="{{ $isAutoNotify ? 'Klik untuk Matikan CD (Mode Tidur) — Bot tidak akan spam WA' : 'Klik untuk Aktifkan CD Kembali' }}" style="font-size: 11px;">
+                    <i class="bi {{ $isAutoNotify ? 'bi-bell-fill text-warning' : 'bi-moon-stars-fill text-warning' }}"></i>
+                    <span>{{ $isAutoNotify ? 'CD: AKTIF' : 'CD: TIDUR' }}</span>
+                </button>
                 <button type="button" class="btn btn-sm btn-success rounded-pill px-2 py-1 fw-bold shadow-xs d-flex align-items-center gap-1" id="btnBotShareAll" style="font-size: 12px;" title="Kirim Rekap Otomatis via Bot Fonnte (Tanpa Buka WA)">
                     <i class="bi bi-robot fs-6"></i> <span>Bot Rekap</span>
                 </button>
@@ -233,13 +227,9 @@
                                 $isKdMuted = $kdMuteMap[$kd] ?? false;
                             @endphp
                             @if($isKdMuted)
-                                @if($isAdmin)
-                                    <button type="button" class="btn btn-xs btn-dark rounded-pill px-2 py-0 fw-bold shadow-xs btn-toggle-mute-kd" data-kd="{{ $kd }}" title="Mode Tidur aktif. Klik untuk Bangunkan / Aktifkan kembali Bot CD untuk KD #{{ $kd }}">
-                                        <i class="bi bi-moon-stars-fill text-warning me-1"></i>Tidur (Klik Bangunkan)
-                                    </button>
-                                @else
-                                    <span class="badge bg-secondary" title="Pengingat KD ini dimatikan oleh Admin (Mode Tidur)"><i class="bi bi-moon-stars-fill"></i> Tidur</span>
-                                @endif
+                                <button type="button" class="btn btn-xs btn-dark rounded-pill px-2 py-0 fw-bold shadow-xs btn-toggle-mute-kd" data-kd="{{ $kd }}" title="Mode Tidur aktif. Klik untuk Bangunkan / Aktifkan kembali Bot CD untuk KD #{{ $kd }}">
+                                    <i class="bi bi-moon-stars-fill text-warning me-1"></i>Tidur (Klik Bangunkan)
+                                </button>
                             @endif
                             @if($readyCount == 0)
                                 <span class="badge bg-secondary"><i class="bi bi-lock-fill"></i> All Cooldown</span>
@@ -1023,7 +1013,7 @@
                             <li><b>Balas OTW / Siap:</b> Diberi toleransi waktu ngerjain (misal <b>{{ $maxWorkMinutes ?? 30 }} menit</b>) tanpa spam.</li>
                             <li><b>Overdue:</b> Jika lewat batas waktu belum selesai di web, bot otomatis <b>spam tiap {{ $spamOverdueInterval ?? 15 }} menit sekali</b>.</li>
                             <li><b>Jam Hening Malam (00:00 - 08:00 WIB):</b> Spam bot berhenti jam 12 malam dan mulai lagi jam 8 pagi WIB.</li>
-                            <li><b>Mode Tidur Manual:</b> Matikan CD di bar atas atau saklar di atas saat tim istirahat (Hanya Admin).</li>
+                            <li><b>Mode Tidur Manual:</b> Matikan CD di bar atas atau saklar di atas saat tim istirahat (Admin & Operator).</li>
                         </ul>
                     </div>
 
@@ -1195,69 +1185,6 @@
             applyFilters();
         });
     }
-
-    // 2. Intercept Form Adjust Log (-1 / +1 / Reset) via AJAX Satset
-    document.querySelectorAll('form[action*="/adjust-log"]').forEach(form => {
-        form.addEventListener('submit', async function(e) {
-            const confirmMsg = form.getAttribute('data-confirm');
-            if (confirmMsg && !window.confirm(confirmMsg)) {
-                e.preventDefault();
-                return;
-            }
-
-            e.preventDefault();
-            const btn = form.querySelector('button[type="submit"]');
-            const originalHtml = btn ? btn.innerHTML : '';
-            if (btn) {
-                btn.disabled = true;
-                btn.style.opacity = '0.6';
-            }
-
-            try {
-                const formData = new FormData(form);
-                const targetUrl = form.getAttribute('action');
-                const response = await fetch(targetUrl, {
-                    method: 'POST',
-                    body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest',
-                        'Accept': 'application/json'
-                    }
-                });
-
-                const data = await response.json();
-                if (response.ok && data.success) {
-                    const parentBox = form.closest('.bg-white.p-2');
-                    if (parentBox && typeof data.farm_count !== 'undefined') {
-                        const countEl = parentBox.querySelector('.fs-4.fw-bold');
-                        if (countEl) countEl.innerHTML = `${data.farm_count}<span class="fs-6 text-muted fw-normal">x</span>`;
-
-                        const decBtn = parentBox.querySelector('button.btn-decrement, button[title*="Kurangi"]');
-                        if (decBtn) decBtn.disabled = (data.farm_count <= 0);
-                    } else {
-                        sessionStorage.setItem('satset_scroll_pos', window.scrollY);
-                        window.location.reload();
-                    }
-                } else {
-                    alert(data.message || 'Gagal memproses perubahan log');
-                }
-            } catch (err) {
-                form.submit();
-            } finally {
-                if (btn) {
-                    btn.style.opacity = '1';
-                    btn.innerHTML = originalHtml;
-                    const parentBox = form.closest('.bg-white.p-2');
-                    if (btn.classList.contains('btn-decrement') && parentBox) {
-                        const currentNum = parseInt(parentBox.querySelector('.fs-4.fw-bold')?.innerText || '0', 10);
-                        btn.disabled = (currentNum <= 0);
-                    } else if (!btn.classList.contains('btn-decrement')) {
-                        btn.disabled = false;
-                    }
-                }
-            }
-        });
-    });
 
     updateFilterButtonStyles();
     applyFilters();

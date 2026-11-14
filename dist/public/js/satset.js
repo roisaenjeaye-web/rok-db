@@ -184,9 +184,16 @@
             form.dataset.satsetBound = 'true';
 
             form.addEventListener('submit', async function (e) {
+                if (form.dataset.submitting === 'true') {
+                    e.preventDefault();
+                    return;
+                }
+                form.dataset.submitting = 'true';
+
                 // Konfirmasi aman via data-confirm
                 const confirmMsg = form.getAttribute('data-confirm');
                 if (confirmMsg && !window.confirm(confirmMsg)) {
+                    form.dataset.submitting = 'false';
                     e.preventDefault();
                     return;
                 }
@@ -240,6 +247,7 @@
                     HTMLFormElement.prototype.submit.call(form);
                     return;
                 } finally {
+                    form.dataset.submitting = 'false';
                     if (btn) {
                         btn.classList.remove('btn-satset-loading');
                         btn.innerHTML = originalHtml;

@@ -66,20 +66,23 @@ class BotNotificationController extends Controller
         ]);
     }
 
-    // Toggle Cepat Matikan / Aktifkan Bot CD (Mode Tidur) - Admin Only
+    // Toggle Cepat Matikan / Aktifkan Bot CD (Mode Tidur) - Admin & Operator
     public function toggleAutoNotify(Request $request)
     {
-        $this->requireAdmin();
+        if (!auth()->check()) {
+            abort(401, 'Silakan login terlebih dahulu.');
+        }
 
         $current = BotSetting::getBoolean('is_auto_notify', true);
         $newStatus = !$current;
         BotSetting::set('is_auto_notify', $newStatus ? '1' : '0');
 
-        $adminName = auth()->user()->name ?? 'Admin';
+        $actorName = auth()->user()->name ?? 'Operator';
+        $roleName  = (auth()->user()->isAdmin()) ? 'Admin' : 'Operator';
         $statusText = $newStatus ? 'DIAKTIFKAN KEMBALI' : 'DINONAKTIFKAN (Mode Tidur)';
         $msg = $newStatus
-            ? "🔔 Bot Pengingat CD berhasil diaktifkan kembali oleh Admin {$adminName}!"
-            : "😴 Bot Pengingat CD dimatikan (Mode Tidur) oleh Admin {$adminName}! Pengingat & spam dinonaktifkan.";
+            ? "🔔 Bot Pengingat CD berhasil diaktifkan kembali oleh {$roleName} {$actorName}!"
+            : "😴 Bot Pengingat CD dimatikan (Mode Tidur) oleh {$roleName} {$actorName}! Pengingat & spam dinonaktifkan.";
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([

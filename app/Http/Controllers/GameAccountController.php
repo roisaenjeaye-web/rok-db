@@ -534,18 +534,21 @@ class GameAccountController extends Controller
         return back()->with('success', $msg);
     }
 
-    // Fitur Matikan / Jeda Cooldown KD Tertentu (Mode Tidur KD) - Admin Only
+    // Fitur Matikan / Jeda Cooldown KD Tertentu (Mode Tidur KD) - Admin & Operator
     public function togglePauseKdCd(Request $request, $kd)
     {
-        self::checkAdminOrFail();
+        if (!auth()->check()) {
+            abort(401, 'Silakan login terlebih dahulu.');
+        }
 
         $current = \App\Models\BotSetting::getBoolean("kd_mute_{$kd}", false);
         $newStatus = !$current;
         \App\Models\BotSetting::set("kd_mute_{$kd}", $newStatus ? '1' : '0');
 
-        $user = auth()->user() ? auth()->user()->name : 'Admin';
+        $user = auth()->user()->name ?? 'Operator';
+        $role = auth()->user()->isAdmin() ? 'Admin' : 'Operator';
         $statusStr = $newStatus ? 'dimatikan (Mode Tidur)' : 'diaktifkan kembali';
-        $msg = "😴 Pengingat/CD KD #{$kd} berhasil {$statusStr} oleh Admin {$user}!";
+        $msg = "😴 Pengingat/CD KD #{$kd} berhasil {$statusStr} oleh {$role} {$user}!";
 
         if ($request->ajax() || $request->wantsJson()) {
             return response()->json([
@@ -712,6 +715,25 @@ class GameAccountController extends Controller
         $worker = $request->input('worker_name');
         $action = $request->input('action');
         $customCount = (int) $request->input('custom_count', 0);
+
+        // Anti-Double-Submit Debounce Guard (cegah klik ganda / duplicate AJAX dalam 600ms)
+        if (in_array($action, ['increment', 'decrement'])) {
+            $debounceKey = "debounce_adjust_{$kd}_{$worker}_{$action}";
+            if (\Illuminate\Support\Facades\Cache::has($debounceKey)) {
+                $stat = KdFarmerStat::where('kd_number', $kd)->where('worker_name', $worker)->first();
+                $curCount = $stat ? $stat->farm_count : 0;
+                if ($request->ajax() || $request->wantsJson()) {
+                    return response()->json([
+                        'success' => true,
+                        'message' => "Log farm {$worker} di KD #{$kd}: {$curCount}x.",
+                        'worker' => $worker,
+                        'farm_count' => $curCount
+                    ]);
+                }
+                return back();
+            }
+            \Illuminate\Support\Facades\Cache::put($debounceKey, true, now()->addMilliseconds(600));
+        }
 
         $stat = DB::transaction(function () use ($kd, $worker, $action, $customCount, $request) {
             if ($action === 'decrement') {
