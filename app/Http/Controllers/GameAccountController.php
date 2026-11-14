@@ -393,10 +393,13 @@ class GameAccountController extends Controller
         $spamUnrepliedInterval = (int) \App\Models\BotSetting::get('spam_unreplied_interval', 30);
         $maxWorkMinutes = (int) \App\Models\BotSetting::get('max_work_minutes', 30);
         $spamOverdueInterval = (int) \App\Models\BotSetting::get('spam_overdue_interval', 15);
+        $quietHoursEnabled = \App\Models\BotSetting::getBoolean('quiet_hours_enabled', true);
+        $isQuietHours = \App\Http\Controllers\BotNotificationController::isQuietHours();
 
         return view('jadwal', compact(
             'groupedByKD', 'kdStats', 'knownWorkers', 'activeWorker', 'kingdoms', 'isAdmin',
-            'isAutoNotify', 'spamUnrepliedInterval', 'maxWorkMinutes', 'spamOverdueInterval', 'kdMuteMap'
+            'isAutoNotify', 'spamUnrepliedInterval', 'maxWorkMinutes', 'spamOverdueInterval',
+            'quietHoursEnabled', 'isQuietHours', 'kdMuteMap'
         ));
     }
 

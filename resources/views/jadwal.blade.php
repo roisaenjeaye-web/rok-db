@@ -978,7 +978,7 @@
                         </div>
 
                         <!-- 3. Spam Overdue Jika Melewati Batas Waktu -->
-                        <div class="mb-1">
+                        <div class="mb-2">
                             <label class="form-label small fw-bold text-muted mb-1" style="font-size: 11px;">
                                 3. INTERVAL SPAM OVERDUE (JIKA LEWAT BATAS WAKTU):
                             </label>
@@ -996,6 +996,19 @@
                                 Jika batas waktu ngerjain habis tapi belum diceklis panen di web, bot akan spam tiap berapa menit.
                             </div>
                         </div>
+
+                        <!-- 4. Mode Jam Hening Malam (00:00 - 08:00 WIB) -->
+                        <div class="mt-2 pt-2 border-top">
+                            <div class="form-check form-switch mb-1">
+                                <input class="form-check-input" type="checkbox" id="checkQuietHours" {{ ($quietHoursEnabled ?? true) ? 'checked' : '' }}>
+                                <label class="form-check-label small fw-bold text-dark" for="checkQuietHours" id="lblCheckQuietHours">
+                                    🌙 Jam Hening Malam (00:00 - 08:00 WIB)
+                                </label>
+                            </div>
+                            <div class="text-muted" style="font-size: 10px;">
+                                Bot otomatis berhenti spam saat jam 12 malam (00:00) dan mulai aktif kembali pukul 08:00 pagi WIB.
+                            </div>
+                        </div>
                     </div>
 
                     <!-- Panduan Aturan Spam & Anti-Lupa -->
@@ -1004,10 +1017,13 @@
                             <i class="bi bi-shield-check text-success me-1 fs-6"></i> Ringkasan Alur Kerja Bot:
                         </div>
                         <ul class="mb-0 ps-3" style="font-size: 11px;">
+                            <li><b>Chat Tunggal (Hemat Token):</b> Notifikasi beberapa KD digabung jadi <b>1 chat WA</b> beserta rincian waktu keterlambatan.</li>
+                            <li><b>Siklus CD Bot:</b> Waktu jeda spam bot otomatis <b>mengikuti KD yang paling baru</b> selesai jeda/overdue.</li>
                             <li><b>Belum Dibalas:</b> Spam dikirim setiap <b>{{ $spamUnrepliedInterval ?? 30 }} menit sekali</b> (dapat diatur).</li>
                             <li><b>Balas OTW / Siap:</b> Diberi toleransi waktu ngerjain (misal <b>{{ $maxWorkMinutes ?? 30 }} menit</b>) tanpa spam.</li>
                             <li><b>Overdue:</b> Jika lewat batas waktu belum selesai di web, bot otomatis <b>spam tiap {{ $spamOverdueInterval ?? 15 }} menit sekali</b>.</li>
-                            <li><b>Mode Tidur:</b> Matikan CD di bar atas atau saklar di atas saat tim istirahat malam (Hanya Admin).</li>
+                            <li><b>Jam Hening Malam (00:00 - 08:00 WIB):</b> Spam bot berhenti jam 12 malam dan mulai lagi jam 8 pagi WIB.</li>
+                            <li><b>Mode Tidur Manual:</b> Matikan CD di bar atas atau saklar di atas saat tim istirahat (Hanya Admin).</li>
                         </ul>
                     </div>
 

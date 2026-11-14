@@ -249,6 +249,12 @@
             form.dataset.satsetBound = 'true';
 
             form.addEventListener('submit', async function (e) {
+                if (form.dataset.submitting === 'true') {
+                    e.preventDefault();
+                    return;
+                }
+                form.dataset.submitting = 'true';
+
                 e.preventDefault();
                 const btn = form.querySelector('button[type="submit"]');
                 const originalHtml = btn ? btn.innerHTML : '';
@@ -277,6 +283,7 @@
                         sessionStorage.setItem('satset_scroll_pos', window.scrollY);
                         window.location.reload();
                     } else {
+                        form.dataset.submitting = 'false';
                         showSatsetToast(data.message || 'Gagal panen', 'danger');
                         if (btn) {
                             btn.classList.remove('btn-satset-loading');
@@ -285,6 +292,7 @@
                         }
                     }
                 } catch (err) {
+                    form.dataset.submitting = 'false';
                     HTMLFormElement.prototype.submit.call(form);
                 }
             });
@@ -484,11 +492,19 @@
         let activeFilter = 'all';
 
         // Bersihkan otomatis jika browser mengautofill email ke input cari KD
-        if (searchInput) {
+        function sanitizeSearchInput() {
+            if (!searchInput) return;
             const val = (searchInput.value || '').trim();
-            if (val.includes('@') || val.includes('.com') || val.includes('.net')) {
+            if (val.includes('@') || val.includes('.com') || val.includes('.net') || val.includes('.org') || (isNaN(val.replace('#', '')) && val.length > 5)) {
                 searchInput.value = '';
+                if (clearSearchBtn) clearSearchBtn.classList.add('d-none');
+                applyFilters();
             }
+        }
+        sanitizeSearchInput();
+        [50, 150, 300, 600, 1200, 2000].forEach(ms => setTimeout(sanitizeSearchInput, ms));
+        if (searchInput) {
+            searchInput.addEventListener('change', sanitizeSearchInput);
         }
 
         function updateFilterButtonStyles() {
@@ -614,13 +630,42 @@
         applyFilters();
     }
 
+    // Helper parse nilai / rumus matematika RSS cell (contoh: "10+10+10" -> 30)
+    function parseRssMath(val) {
+        if (!val) return 0;
+        if (typeof val === 'number') return val;
+        let str = String(val).trim().replace(/^=\s*/, '').replace(/,/g, '.');
+        str = str.replace(/[^0-9+\-*/.()]/g, '');
+        if (!str) return 0;
+        str = str.replace(/[+\-*/]+$/, '').trim();
+        if (!str) return 0;
+        try {
+            const evaluated = Function('"use strict"; return (' + str + ')')();
+            return (typeof evaluated === 'number' && isFinite(evaluated)) ? Math.max(0, evaluated) : 0;
+        } catch (e) {
+            const parts = str.split('+');
+            let sum = 0;
+            for (const p of parts) {
+                const n = parseFloat(p.trim());
+                if (!isNaN(n)) sum += n;
+            }
+            return Math.max(0, sum);
+        }
+    }
+    window.parseRssMath = parseRssMath;
+
     // 4. Salin Format Pesanan WhatsApp Profesional (1-Click)
     window.copyWhatsAppFormat = function () {
         const kd = document.getElementById('input_kd') ? document.getElementById('input_kd').value.trim() : '';
-        const food = parseFloat(document.getElementById('input_food') ? document.getElementById('input_food').value : 0) || 0;
-        const wood = parseFloat(document.getElementById('input_wood') ? document.getElementById('input_wood').value : 0) || 0;
-        const stone = parseFloat(document.getElementById('input_stone') ? document.getElementById('input_stone').value : 0) || 0;
-        const gold = parseFloat(document.getElementById('input_gold') ? document.getElementById('input_gold').value : 0) || 0;
+        const foodRaw = document.getElementById('input_food') ? document.getElementById('input_food').value : '';
+        const woodRaw = document.getElementById('input_wood') ? document.getElementById('input_wood').value : '';
+        const stoneRaw = document.getElementById('input_stone') ? document.getElementById('input_stone').value : '';
+        const goldRaw = document.getElementById('input_gold') ? document.getElementById('input_gold').value : '';
+
+        const food = parseRssMath(foodRaw);
+        const wood = parseRssMath(woodRaw);
+        const stone = parseRssMath(stoneRaw);
+        const gold = parseRssMath(goldRaw);
         const tax = parseFloat(document.getElementById('input_tax') ? document.getElementById('input_tax').value : 0) || 8;
         const pricePerM = parseFloat(document.getElementById('input_price') ? document.getElementById('input_price').value : 0) || 0;
 
@@ -647,10 +692,22 @@
         const totalPrice = pricePerM > 0 ? Math.round(totalNet * pricePerM) : 0;
 
         let rssList = [];
-        if (food > 0) rssList.push(`  🌽 Food: ${food.toFixed(2)}M`);
-        if (wood > 0) rssList.push(`  🪵 Wood: ${wood.toFixed(2)}M`);
-        if (stone > 0) rssList.push(`  🪨 Stone: ${stone.toFixed(2)}M`);
-        if (gold > 0) rssList.push(`  🪙 Gold: ${gold.toFixed(2)}M`);
+        if (food > 0) {
+            const note = /[\+\-\*\/]/.test(foodRaw) ? ` _(${foodRaw.trim()})_` : '';
+            rssList.push(`  🌽 Food: ${food.toFixed(2)}M${note}`);
+        }
+        if (wood > 0) {
+            const note = /[\+\-\*\/]/.test(woodRaw) ? ` _(${woodRaw.trim()})_` : '';
+            rssList.push(`  🪵 Wood: ${wood.toFixed(2)}M${note}`);
+        }
+        if (stone > 0) {
+            const note = /[\+\-\*\/]/.test(stoneRaw) ? ` _(${stoneRaw.trim()})_` : '';
+            rssList.push(`  🪨 Stone: ${stone.toFixed(2)}M${note}`);
+        }
+        if (gold > 0) {
+            const note = /[\+\-\*\/]/.test(goldRaw) ? ` _(${goldRaw.trim()})_` : '';
+            rssList.push(`  🪙 Gold: ${gold.toFixed(2)}M${note}`);
+        }
 
         let text = `👑 *DETAIL PESANAN RSS RoK* 👑\n`;
         text += `-----------------------------------\n`;
@@ -924,6 +981,9 @@
             const inputToken = document.getElementById('inputFonnteToken');
             const inputPhone = document.getElementById('inputSettingWAPhone');
             const checkAuto = document.getElementById('checkAutoNotify');
+            const inputUnreplied = document.getElementById('inputSpamUnrepliedInterval');
+            const inputMaxWork = document.getElementById('inputMaxWorkMinutes');
+            const inputOverdue = document.getElementById('inputSpamOverdueInterval');
             const badgeStatus = document.getElementById('badgeDeviceStatus');
             const btnToggleEye = document.getElementById('btnToggleTokenVisibility');
             const btnSave = document.getElementById('btnSaveBotSettings');
@@ -931,6 +991,37 @@
             const btnTestConn = document.getElementById('btnTestDeviceConn');
             const inputWebhook = document.getElementById('inputWebhookUrl');
             const btnCopyWebhook = document.getElementById('btnCopyWebhookUrl');
+
+            function syncQuickBtns(selector, val) {
+                document.querySelectorAll(selector).forEach(b => {
+                    if (parseInt(b.dataset.val, 10) === parseInt(val, 10)) {
+                        b.classList.remove('btn-outline-secondary');
+                        b.classList.add('active', 'btn-outline-primary', 'fw-bold');
+                    } else {
+                        b.classList.remove('active', 'btn-outline-primary', 'fw-bold');
+                        b.classList.add('btn-outline-secondary');
+                    }
+                });
+            }
+
+            // Quick button click listeners
+            document.addEventListener('click', function(e) {
+                const bUnreplied = e.target.closest('.btn-quick-unreplied');
+                if (bUnreplied && inputUnreplied) {
+                    inputUnreplied.value = bUnreplied.dataset.val;
+                    syncQuickBtns('.btn-quick-unreplied', bUnreplied.dataset.val);
+                }
+                const bMaxWork = e.target.closest('.btn-quick-maxwork');
+                if (bMaxWork && inputMaxWork) {
+                    inputMaxWork.value = bMaxWork.dataset.val;
+                    syncQuickBtns('.btn-quick-maxwork', bMaxWork.dataset.val);
+                }
+                const bOverdue = e.target.closest('.btn-quick-overdue');
+                if (bOverdue && inputOverdue) {
+                    inputOverdue.value = bOverdue.dataset.val;
+                    syncQuickBtns('.btn-quick-overdue', bOverdue.dataset.val);
+                }
+            });
 
             if (btnCopyWebhook && inputWebhook) {
                 btnCopyWebhook.addEventListener('click', function () {
@@ -960,8 +1051,32 @@
                     if (data.success) {
                         if (inputToken) inputToken.value = data.fonnte_token || '';
                         if (inputPhone) inputPhone.value = data.target_phone || '';
-                        if (checkAuto) checkAuto.checked = !!data.is_auto_notify;
+                        if (checkAuto) {
+                            checkAuto.checked = !!data.is_auto_notify;
+                            const lblAuto = document.getElementById('lblCheckAutoNotify');
+                            if (lblAuto) {
+                                lblAuto.innerHTML = checkAuto.checked ? '🔔 Pengingat Bot CD: AKTIF' : '😴 Mode Tidur: AKTIF (Bot Dimatikan)';
+                            }
+                        }
                         if (inputWebhook && data.webhook_url) inputWebhook.value = data.webhook_url;
+
+                        if (inputUnreplied && data.spam_unreplied_interval) {
+                            inputUnreplied.value = data.spam_unreplied_interval;
+                            syncQuickBtns('.btn-quick-unreplied', data.spam_unreplied_interval);
+                        }
+                        if (inputMaxWork && data.max_work_minutes) {
+                            inputMaxWork.value = data.max_work_minutes;
+                            syncQuickBtns('.btn-quick-maxwork', data.max_work_minutes);
+                        }
+                        if (inputOverdue && data.spam_overdue_interval) {
+                            inputOverdue.value = data.spam_overdue_interval;
+                            syncQuickBtns('.btn-quick-overdue', data.spam_overdue_interval);
+                        }
+
+                        const checkQuiet = document.getElementById('checkQuietHours');
+                        if (checkQuiet && typeof data.quiet_hours_enabled !== 'undefined') {
+                            checkQuiet.checked = !!data.quiet_hours_enabled;
+                        }
 
                         if (data.target_phone) {
                             localStorage.setItem('rok_wa_phone', data.target_phone);
@@ -1007,6 +1122,15 @@
 
             modalEl.addEventListener('show.bs.modal', loadBotSettings);
 
+            if (checkAuto) {
+                checkAuto.addEventListener('change', function () {
+                    const lblAuto = document.getElementById('lblCheckAutoNotify');
+                    if (lblAuto) {
+                        lblAuto.innerHTML = this.checked ? '🔔 Pengingat Bot CD: AKTIF' : '😴 Mode Tidur: AKTIF (Bot Dimatikan)';
+                    }
+                });
+            }
+
             if (btnToggleEye && inputToken) {
                 btnToggleEye.addEventListener('click', function () {
                     const isPass = inputToken.type === 'password';
@@ -1020,6 +1144,11 @@
                     const tokenVal = inputToken ? inputToken.value.trim() : '';
                     const phoneVal = inputPhone ? inputPhone.value.trim() : '';
                     const isAutoVal = checkAuto ? checkAuto.checked : true;
+                    const unrepliedVal = inputUnreplied ? parseInt(inputUnreplied.value, 10) : 30;
+                    const maxWorkVal = inputMaxWork ? parseInt(inputMaxWork.value, 10) : 30;
+                    const overdueVal = inputOverdue ? parseInt(inputOverdue.value, 10) : 15;
+                    const checkQuiet = document.getElementById('checkQuietHours');
+                    const quietVal = checkQuiet ? checkQuiet.checked : true;
 
                     btnSave.disabled = true;
                     btnSave.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
@@ -1035,7 +1164,11 @@
                             body: JSON.stringify({
                                 fonnte_token: tokenVal,
                                 target_phone: phoneVal,
-                                is_auto_notify: isAutoVal
+                                is_auto_notify: isAutoVal,
+                                spam_unreplied_interval: unrepliedVal,
+                                max_work_minutes: maxWorkVal,
+                                spam_overdue_interval: overdueVal,
+                                quiet_hours_enabled: quietVal
                             })
                         });
                         const data = await res.json();
@@ -1183,7 +1316,13 @@
         }
 
         // F. Auto-Notify Heartbeat (Otomatis kirim saat tab terbuka & KD selesai jeda tanpa klik apapun)
+        // - Interval 60 detik (server guard 2 menit cegah duplikat dari multiple tab)
+        // - Pause otomatis saat tab tersembunyi (hemat kuota Fonnte)
+        // - Langsung cek ulang saat tab aktif kembali setelah >= 8 menit tidak aktif
         async function runAutoNotifyHeartbeat() {
+            // Jangan kirim saat tab sedang tersembunyi/minimize
+            if (document.visibilityState === 'hidden') return;
+
             try {
                 const res = await fetch('/bot/check-auto-notify', {
                     method: 'POST',
@@ -1195,15 +1334,19 @@
                 });
                 const data = await res.json();
                 if (data.success && data.notified_count > 0) {
-                    data.notified_kds.forEach(item => {
-                        if (item.type === 'spam_10m_unreplied') {
-                            showSatsetToast(`⚠️ <b>[Bot WA Fonnte]</b> Spam 10 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (${item.ready_count} char) karena belum dibalas!`, 'warning');
-                        } else if (item.type === 'spam_5m_overdue') {
-                            showSatsetToast(`🔥 <b>[Bot WA Fonnte]</b> Spam Overdue 5 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (> 30m belum diceklis)!`, 'danger');
-                        } else {
-                            showSatsetToast(`🤖 <b>[Bot WA Fonnte]</b> Pengingat KD #${item.kd} (${item.ready_count} char siap) otomatis terkirim ke WhatsApp!`, 'success');
-                        }
-                    });
+                    if (data.bundled) {
+                        showSatsetToast(`🤖 <b>[Bot WA Fonnte]</b> Chat pengingat gabungan (${data.notified_count} KD) berhasil dikirim ke grup WhatsApp!`, 'success');
+                    } else {
+                        data.notified_kds.forEach(item => {
+                            if (item.type === 'spam_10m_unreplied' || item.type === 'spam_5m_unreplied' || item.type === 'spam_unreplied') {
+                                showSatsetToast(`⚠️ <b>[Bot WA Fonnte]</b> Spam Pengingat #${item.reminder_count} terkirim untuk KD #${item.kd} (${item.ready_count} char) karena belum dibalas!`, 'warning');
+                            } else if (item.type === 'spam_5m_overdue' || item.type === 'spam_overdue') {
+                                showSatsetToast(`🔥 <b>[Bot WA Fonnte]</b> Spam Overdue #${item.reminder_count} terkirim untuk KD #${item.kd} (> 30m belum diceklis)!`, 'danger');
+                            } else {
+                                showSatsetToast(`🤖 <b>[Bot WA Fonnte]</b> Pengingat KD #${item.kd} (${item.ready_count} char siap) otomatis terkirim ke WhatsApp!`, 'success');
+                            }
+                        });
+                    }
                 }
             } catch (e) {
                 // Background check, abaikan jika offline
@@ -1246,9 +1389,61 @@
             }
         });
 
-        // Jalankan pengecekan heartbeat pertama kali setelah 5 detik, lalu tiap 25 detik
+        // Listener 1-Klik Bangunkan / Matikan CD per KD (Admin Only)
+        document.addEventListener('click', async function (e) {
+            const btn = e.target.closest('.btn-toggle-mute-kd');
+            if (!btn) return;
+            const kd = btn.getAttribute('data-kd');
+            if (!kd || btn.disabled) return;
+
+            btn.disabled = true;
+            const origHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm" style="width: 10px; height: 10px;"></span>';
+
+            try {
+                const res = await fetch(`/jadwal/kd/${kd}/toggle-pause-cd`, {
+                    method: 'POST',
+                    headers: {
+                        'X-CSRF-TOKEN': getCsrfToken(),
+                        'Accept': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                const data = await res.json();
+                if (data.success) {
+                    showSatsetToast(data.message, 'success');
+                    setTimeout(() => location.reload(), 800);
+                } else {
+                    showSatsetToast(data.message || 'Gagal mengubah status tidur KD', 'danger');
+                    btn.disabled = false;
+                    btn.innerHTML = origHtml;
+                }
+            } catch (err) {
+                showSatsetToast('Gagal menghubungi server', 'danger');
+                btn.disabled = false;
+                btn.innerHTML = origHtml;
+            }
+        });
+
+        // Jalankan pengecekan heartbeat:
+        // - Pertama: 5 detik setelah halaman terbuka
+        // - Selanjutnya: tiap 60 detik (server guard 2 menit cegah duplikat)
         setTimeout(runAutoNotifyHeartbeat, 5000);
-        setInterval(runAutoNotifyHeartbeat, 25000);
+        setInterval(runAutoNotifyHeartbeat, 60000);
+
+        // Cek ulang segera saat tab aktif kembali setelah >= 8 menit tersembunyi
+        let tabHiddenAt = null;
+        document.addEventListener('visibilitychange', function () {
+            if (document.visibilityState === 'hidden') {
+                tabHiddenAt = Date.now();
+            } else if (document.visibilityState === 'visible') {
+                const hiddenMs = tabHiddenAt ? (Date.now() - tabHiddenAt) : 0;
+                if (hiddenMs >= 8 * 60 * 1000) {
+                    runAutoNotifyHeartbeat();
+                }
+                tabHiddenAt = null;
+            }
+        });
 
         // Ekspor fungsi trigger heartbeat langsung saat timer 00:00
         window.SatsetTriggerHeartbeat = runAutoNotifyHeartbeat;

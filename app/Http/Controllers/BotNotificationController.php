@@ -22,6 +22,30 @@ class BotNotificationController extends Controller
         }
     }
 
+    /**
+     * Cek apakah saat ini berada di Jam Hening (Quiet Hours / Jam Istirahat Malam).
+     * Default: 00:00 s/d 08:00 WIB (Spam bot berhenti jam 12 malam dan mulai lagi jam 8 pagi).
+     */
+    public static function isQuietHours(): bool
+    {
+        $quietEnabled = BotSetting::getBoolean('quiet_hours_enabled', true);
+        if (!$quietEnabled) {
+            return false;
+        }
+
+        $nowWib = now()->setTimezone('Asia/Jakarta');
+        $hour   = (int) $nowWib->format('H'); // 0 sampai 23
+
+        $quietStart = (int) BotSetting::get('quiet_hours_start', 0); // 0 = 00:00 (12 malam)
+        $quietEnd   = (int) BotSetting::get('quiet_hours_end', 8);   // 8 = 08:00 pagi
+
+        if ($quietStart < $quietEnd) {
+            return ($hour >= $quietStart && $hour < $quietEnd);
+        } else {
+            return ($hour >= $quietStart || $hour < $quietEnd);
+        }
+    }
+
     // Ambil setting bot
     public function getSettings()
     {
@@ -33,6 +57,10 @@ class BotNotificationController extends Controller
             'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 30),
             'max_work_minutes' => (int) BotSetting::get('max_work_minutes', 30),
             'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 15),
+            'quiet_hours_enabled' => BotSetting::getBoolean('quiet_hours_enabled', true),
+            'quiet_hours_start' => (int) BotSetting::get('quiet_hours_start', 0),
+            'quiet_hours_end' => (int) BotSetting::get('quiet_hours_end', 8),
+            'is_quiet_hours' => self::isQuietHours(),
             'webhook_url' => $this->getWebhookUrl(),
             'is_admin' => auth()->check() && auth()->user()->isAdmin(),
         ]);
@@ -76,6 +104,9 @@ class BotNotificationController extends Controller
             'spam_unreplied_interval' => 'nullable|integer|min:1|max:1440',
             'max_work_minutes' => 'nullable|integer|min:1|max:1440',
             'spam_overdue_interval' => 'nullable|integer|min:1|max:1440',
+            'quiet_hours_enabled' => 'nullable|boolean',
+            'quiet_hours_start' => 'nullable|integer|min:0|max:23',
+            'quiet_hours_end' => 'nullable|integer|min:0|max:23',
         ]);
 
         if ($request->has('fonnte_token')) {
@@ -102,6 +133,18 @@ class BotNotificationController extends Controller
             BotSetting::set('spam_overdue_interval', (int) $request->input('spam_overdue_interval'));
         }
 
+        if ($request->has('quiet_hours_enabled')) {
+            BotSetting::set('quiet_hours_enabled', $request->boolean('quiet_hours_enabled') ? '1' : '0');
+        }
+
+        if ($request->has('quiet_hours_start')) {
+            BotSetting::set('quiet_hours_start', (int) $request->input('quiet_hours_start'));
+        }
+
+        if ($request->has('quiet_hours_end')) {
+            BotSetting::set('quiet_hours_end', (int) $request->input('quiet_hours_end'));
+        }
+
         $webhookUrl = $this->getWebhookUrl();
         $fonnteToken = BotSetting::get('fonnte_token', '');
         if (!empty($fonnteToken)) {
@@ -118,6 +161,10 @@ class BotNotificationController extends Controller
                 'spam_unreplied_interval' => (int) BotSetting::get('spam_unreplied_interval', 30),
                 'max_work_minutes' => (int) BotSetting::get('max_work_minutes', 30),
                 'spam_overdue_interval' => (int) BotSetting::get('spam_overdue_interval', 15),
+                'quiet_hours_enabled' => BotSetting::getBoolean('quiet_hours_enabled', true),
+                'quiet_hours_start' => (int) BotSetting::get('quiet_hours_start', 0),
+                'quiet_hours_end' => (int) BotSetting::get('quiet_hours_end', 8),
+                'is_quiet_hours' => self::isQuietHours(),
                 'webhook_url' => $webhookUrl,
             ]
         ]);
@@ -515,6 +562,18 @@ class BotNotificationController extends Controller
      *  4. Guard 2 menit: cegah double-fire dari concurrent heartbeat browser
      *  5. Deteksi siklus baru: jika char baru saja di-farm, reset state notifikasi
      */
+    /**
+     * Core Engine: Mengevaluasi status semua KD dan mengirim notifikasi / spam gabungan (Single Chat).
+     *
+     * Aturan Kerja Bot:
+     *  1. Jam Hening (Quiet Hours): 00:00 s/d 08:00 WIB spam berhenti dan mulai lagi pukul 08:00 WIB.
+     *  2. Single Batched Message: Semua KD yang butuh perhatian digabung ke dalam 1 pesan WA tunggal (hemat kuota token).
+     *  3. Cooldown Selaras (Mengikuti yang paling baru):
+     *     - Jika ada KD yang baru ready, kirim 1 chat gabungan (menyertakan KD yang sedang menunggu).
+     *     - Seluruh KD dalam chat tersebut disetel ulang waktu notifikasinya ke waktu kirim terbaru.
+     *     - Spam pengingat berikutnya baru akan dikirim 30 menit (atau 15 menit overdue) dari waktu pesan terbaru!
+     *  4. Anti-Concurrency Guard: Menahan spam beruntun dalam 90 detik dari tab browser atau cron simultan.
+     */
     public static function evaluateAndNotifyKingdoms(?string $worker = null): array
     {
         $isAuto = BotSetting::getBoolean('is_auto_notify', true);
@@ -522,10 +581,41 @@ class BotNotificationController extends Controller
             return ['success' => true, 'auto_enabled' => false, 'notified_count' => 0, 'notified_kds' => []];
         }
 
+        // 1. CEK JAM HENING (QUIET HOURS: 00:00 - 08:00 WIB)
+        if (self::isQuietHours()) {
+            return [
+                'success' => true,
+                'auto_enabled' => true,
+                'quiet_hours' => true,
+                'message' => 'Bot sedang dalam mode jam hening malam (00:00 - 08:00 WIB). Spam dinonaktifkan.',
+                'notified_count' => 0,
+                'notified_kds' => []
+            ];
+        }
+
         $phone = BotSetting::get('target_phone');
         $token = BotSetting::get('fonnte_token');
         if (empty($phone) || empty($token)) {
             return ['success' => false, 'message' => 'Token atau Nomor WA belum diset', 'notified_count' => 0, 'notified_kds' => []];
+        }
+
+        // Concurrency Guard: jangan kirim pesan jika pesan gabungan baru saja dikirim < 90 detik lalu
+        $lastSentIso = BotSetting::get('bot_last_bundled_sent_at');
+        if ($lastSentIso) {
+            try {
+                $lastSentTime = \Carbon\Carbon::parse($lastSentIso);
+                if ($lastSentTime->greaterThan(now()->subSeconds(90))) {
+                    return [
+                        'success' => true,
+                        'throttled' => true,
+                        'message' => 'Notifikasi bot baru saja dikirim dalam 90 detik terakhir.',
+                        'notified_count' => 0,
+                        'notified_kds' => []
+                    ];
+                }
+            } catch (\Throwable $e) {
+                // ignore
+            }
         }
 
         $groupedByKD = Character::with('gameAccount')->get()->groupBy('kd_number')->sortKeys();
@@ -535,12 +625,14 @@ class BotNotificationController extends Controller
         $maxWorkMinutes        = (int) BotSetting::get('max_work_minutes', 30);
         $spamOverdueInterval   = (int) BotSetting::get('spam_overdue_interval', 15);
 
-        $notifiedKds = [];
-        $sendErrors = [];
-        $deviceHealth = null;
+        $unrepliedCandidates = [];
+        $overdueCandidates   = [];
+
+        $hasNewReadyTrigger   = false;
+        $hasNewOverdueTrigger = false;
 
         foreach ($groupedByKD as $kd => $kChars) {
-            // Cek apakah KD ini secara spesifik dimatikan/dijeda oleh admin (Mode Tidur KD)
+            // Cek apakah KD ini dimatikan/dijeda oleh admin (Mode Tidur KD)
             $isKdMuted = BotSetting::getBoolean("kd_mute_{$kd}", false);
             if ($isKdMuted) {
                 continue;
@@ -550,7 +642,7 @@ class BotNotificationController extends Controller
             $cooldownHours = $kingdom ? (float) $kingdom->cooldown_hours : 4.0;
             $cooldownMinutes = (int) round($cooldownHours * 60);
 
-            // ANTI-SPAM GUARD: Jika KD ini baru saja dibalas dalam 5 menit terakhir, abaikan agar tidak spam reply beruntun
+            // ANTI-SPAM GUARD: Jika KD ini baru saja dibalas dalam 5 menit terakhir, abaikan
             if ($kingdom && $kingdom->replied_at && $kingdom->replied_at->greaterThan(now()->subMinutes(5))) {
                 continue;
             }
@@ -571,7 +663,7 @@ class BotNotificationController extends Controller
 
             // KASUS 0: Semua char masih cooldown -- bersihkan state KD
             if ($readyCount === 0) {
-                if ($kingdom && ($kingdom->replied_at || $kingdom->ready_since || ($kingdom->reminder_count ?? 0) > 0)) {
+                if ($kingdom && ($kingdom->replied_at || $kingdom->ready_since || ($kingdom->reminder_count ?? 0) > 0 || $kingdom->last_notified_at)) {
                     $kingdom->replied_at       = null;
                     $kingdom->replied_by       = null;
                     $kingdom->ready_since      = null;
@@ -587,9 +679,7 @@ class BotNotificationController extends Controller
                 $kingdom = Kingdom::firstOrCreate(['kd_number' => $kd]);
             }
 
-            // Deteksi siklus farm baru:
-            // Jika latestFarmedAt >= ready_since, char baru saja selesai cooldown setelah di-farm
-            // -> ini siklus notifikasi baru, reset semua state notifikasi
+            // Deteksi siklus farm baru: jika latestFarmedAt >= ready_since, char baru selesai panen & cooldown lagi
             $isNewCycle = $latestFarmedAt && (
                 $kingdom->ready_since === null
                 || $kingdom->ready_since->lte($latestFarmedAt)
@@ -603,7 +693,6 @@ class BotNotificationController extends Controller
                 $kingdom->replied_by       = null;
                 $kingdom->save();
             } elseif ($kingdom->ready_since === null) {
-                // Char belum pernah di-farm sebelumnya
                 $kingdom->ready_since    = now();
                 $kingdom->reminder_count = 0;
                 $kingdom->save();
@@ -612,109 +701,284 @@ class BotNotificationController extends Controller
             $lastNotified = $kingdom->last_notified_at;
             $repliedAt    = $kingdom->replied_at;
 
-            // Guard: cegah double-fire dalam 2 menit (dari concurrent heartbeat browser multiple tab)
-            if ($lastNotified && $lastNotified->gte(now()->subMinutes(2))) {
-                continue;
-            }
-
-            // KASUS 1: Belum dibalas (replied_at == null)
-            // last_notified null -> notif awal SEGERA
-            // last_notified ada dan >= ($spamUnrepliedInterval - 1) menit -> spam unreplied
+            // KASUS A: Belum dibalas (replied_at === null)
             if ($repliedAt === null) {
-                $shouldSend = false;
-                $isSpam     = false;
+                $minsSinceReady = $kingdom->ready_since ? (int) round(now()->diffInMinutes($kingdom->ready_since, true)) : 0;
+                $minsSinceLastNotif = $lastNotified ? (int) round(now()->diffInMinutes($lastNotified, true)) : null;
 
-                if ($lastNotified === null) {
-                    // Notifikasi pertama -- kirim segera
-                    $shouldSend = true;
-                    $isSpam     = false;
-                } else {
-                    $minsElapsed = (int) now()->diffInMinutes($lastNotified, true);
-                    if ($minsElapsed >= max(1, $spamUnrepliedInterval - 1)) {
-                        $shouldSend = true;
-                        $isSpam     = true;
-                    }
+                $isNewReady = ($lastNotified === null);
+                if ($isNewReady) {
+                    $hasNewReadyTrigger = true;
                 }
 
-                if ($shouldSend) {
-                    $msg = self::buildReadyOrSpam5Text($kd, $readyCount, $kChars->count(), $cooldownHours, $kingdom, $isSpam, $worker, $spamUnrepliedInterval);
-                    $res = FonnteService::sendMessage($phone, $msg, $token);
-
-                    if ($res['success']) {
-                        $kingdom->last_notified_at = now();
-                        $kingdom->reminder_count   = ($kingdom->reminder_count ?? 0) + 1;
-                        $kingdom->save();
-
-                        $notifiedKds[] = [
-                            'kd'             => $kd,
-                            'ready_count'    => $readyCount,
-                            'type'           => $isSpam ? "spam_{$spamUnrepliedInterval}m_unreplied" : 'initial_ready',
-                            'reminder_count' => $kingdom->reminder_count,
-                        ];
-                    } else {
-                        $errReason = $res['message'] ?? 'Gagal mengirim pesan via Fonnte';
-                        $sendErrors[] = ['kd' => $kd, 'error' => $errReason];
-                        Log::warning("Bot Auto-Notify gagal kirim KD #{$kd}: {$errReason}");
-                        if ($deviceHealth === null) {
-                            $deviceHealth = FonnteService::checkDeviceStatus($token);
-                        }
-                        if (!($deviceHealth['success'] ?? false)) {
-                            break;
-                        }
-                    }
-                }
+                $unrepliedCandidates[] = [
+                    'category'              => 'unreplied',
+                    'kd'                    => $kd,
+                    'ready_count'           => $readyCount,
+                    'total_chars'           => $kChars->count(),
+                    'cooldown_hours'        => $cooldownHours,
+                    'kingdom'               => $kingdom,
+                    'mins_since_ready'      => $minsSinceReady,
+                    'mins_since_last_notif' => $minsSinceLastNotif,
+                    'is_new_ready'          => $isNewReady,
+                    'reminder_count'        => (int) ($kingdom->reminder_count ?? 0),
+                ];
             }
-            // KASUS 2: Sudah dibalas (replied_at != null)
-            // Diberi jeda $maxWorkMinutes. Lewat $maxWorkMinutes dan >= $spamOverdueInterval menit sejak notif terakhir -> spam
+            // KASUS B: Sudah dibalas (replied_at !== null)
             else {
-                $minsSinceReply = (int) now()->diffInMinutes($repliedAt, true);
+                $minsSinceReply = (int) round(now()->diffInMinutes($repliedAt, true));
 
+                // Jika sudah melewati batas toleransi waktu pengerjaan -> OVERDUE!
                 if ($minsSinceReply >= $maxWorkMinutes) {
-                    $diffSinceLastNotif = $lastNotified
-                        ? (int) now()->diffInMinutes($lastNotified, true)
-                        : 999;
+                    $minsOverdue = $minsSinceReply - $maxWorkMinutes;
+                    $minsSinceLastNotif = $lastNotified ? (int) round(now()->diffInMinutes($lastNotified, true)) : null;
 
-                    // Spam tiap $spamOverdueInterval menit selama belum dikelarin
-                    if ($diffSinceLastNotif >= max(1, $spamOverdueInterval - 1)) {
-                        $msg = self::buildOverdueSpam5Text($kd, $readyCount, $kChars->count(), $cooldownHours, $kingdom, $minsSinceReply, $maxWorkMinutes, $spamOverdueInterval);
-                        $res = FonnteService::sendMessage($phone, $msg, $token);
+                    // Waktu mulai overdue = repliedAt + maxWorkMinutes
+                    $overdueStartTime = $repliedAt->copy()->addMinutes($maxWorkMinutes);
+                    $isNewOverdue = ($lastNotified === null || $lastNotified->lt($overdueStartTime));
 
-                        if ($res['success']) {
-                            $kingdom->last_notified_at = now();
-                            $kingdom->reminder_count   = ($kingdom->reminder_count ?? 0) + 1;
-                            $kingdom->save();
-
-                            $notifiedKds[] = [
-                                'kd'             => $kd,
-                                'ready_count'    => $readyCount,
-                                'type'           => "spam_{$spamOverdueInterval}m_overdue",
-                                'reminder_count' => $kingdom->reminder_count,
-                            ];
-                        } else {
-                            $errReason = $res['message'] ?? 'Gagal mengirim pesan via Fonnte';
-                            $sendErrors[] = ['kd' => $kd, 'error' => $errReason];
-                            Log::warning("Bot Auto-Notify overdue gagal kirim KD #{$kd}: {$errReason}");
-                            if ($deviceHealth === null) {
-                                $deviceHealth = FonnteService::checkDeviceStatus($token);
-                            }
-                            if (!($deviceHealth['success'] ?? false)) {
-                                break;
-                            }
-                        }
+                    if ($isNewOverdue) {
+                        $hasNewOverdueTrigger = true;
                     }
+
+                    $overdueCandidates[] = [
+                        'category'              => 'overdue',
+                        'kd'                    => $kd,
+                        'ready_count'           => $readyCount,
+                        'total_chars'           => $kChars->count(),
+                        'cooldown_hours'        => $cooldownHours,
+                        'kingdom'               => $kingdom,
+                        'mins_since_reply'      => $minsSinceReply,
+                        'mins_overdue'          => $minsOverdue,
+                        'replied_by'            => $kingdom->replied_by ?: 'Anggota Tim',
+                        'mins_since_last_notif' => $minsSinceLastNotif,
+                        'is_new_overdue'        => $isNewOverdue,
+                        'reminder_count'        => (int) ($kingdom->reminder_count ?? 0),
+                    ];
                 }
-                // Sudah dibalas tapi belum lewat $maxWorkMinutes: diam, tidak spam
             }
         }
 
+        // EVALUASI APAKAH SAATNYA MENGIRIM PESAN GABUNGAN:
+        // 1. Untuk Unreplied:
+        //    - Ada yang baru ready ($hasNewReadyTrigger = true), ATAU
+        //    - Jeda dari pengingat terbaru sudah mencapai $spamUnrepliedInterval (misal 30 menit)
+        $unrepliedDue = false;
+        if (!empty($unrepliedCandidates)) {
+            if ($hasNewReadyTrigger) {
+                $unrepliedDue = true;
+            } else {
+                $minUnrepliedElapsed = 9999;
+                foreach ($unrepliedCandidates as $c) {
+                    if ($c['mins_since_last_notif'] !== null && $c['mins_since_last_notif'] < $minUnrepliedElapsed) {
+                        $minUnrepliedElapsed = $c['mins_since_last_notif'];
+                    }
+                }
+                if ($minUnrepliedElapsed >= max(1, $spamUnrepliedInterval - 1)) {
+                    $unrepliedDue = true;
+                }
+            }
+        }
+
+        // 2. Untuk Overdue:
+        //    - Ada yang baru overdue ($hasNewOverdueTrigger = true), ATAU
+        //    - Jeda dari pengingat terbaru sudah mencapai $spamOverdueInterval (misal 15 menit)
+        $overdueDue = false;
+        if (!empty($overdueCandidates)) {
+            if ($hasNewOverdueTrigger) {
+                $overdueDue = true;
+            } else {
+                $minOverdueElapsed = 9999;
+                foreach ($overdueCandidates as $c) {
+                    if ($c['mins_since_last_notif'] !== null && $c['mins_since_last_notif'] < $minOverdueElapsed) {
+                        $minOverdueElapsed = $c['mins_since_last_notif'];
+                    }
+                }
+                if ($minOverdueElapsed >= max(1, $spamOverdueInterval - 1)) {
+                    $overdueDue = true;
+                }
+            }
+        }
+
+        // Jika tidak ada yang jatuh tempo kirim, keluar tanpa kirim apa-apa
+        if (!$unrepliedDue && !$overdueDue) {
+            return [
+                'success'         => true,
+                'auto_enabled'    => true,
+                'notified_count'  => 0,
+                'notified_kds'    => [],
+                'unreplied_count' => count($unrepliedCandidates),
+                'overdue_count'   => count($overdueCandidates),
+            ];
+        }
+
+        // Urutkan kandidat: yang baru ready / baru overdue di atas agar langsung diperhatikan joki
+        usort($unrepliedCandidates, function ($a, $b) {
+            if ($a['is_new_ready'] !== $b['is_new_ready']) {
+                return $b['is_new_ready'] <=> $a['is_new_ready'];
+            }
+            return $b['mins_since_ready'] <=> $a['mins_since_ready'];
+        });
+
+        usort($overdueCandidates, function ($a, $b) {
+            if ($a['is_new_overdue'] !== $b['is_new_overdue']) {
+                return $b['is_new_overdue'] <=> $a['is_new_overdue'];
+            }
+            return $b['mins_overdue'] <=> $a['mins_overdue'];
+        });
+
+        // Bangun 1 pesan WA gabungan tunggal
+        $bundledMsg = self::buildBundledNotificationText(
+            $unrepliedCandidates,
+            $overdueCandidates,
+            $spamUnrepliedInterval,
+            $spamOverdueInterval,
+            $maxWorkMinutes,
+            $worker
+        );
+
+        // Kirim HANYA 1 CHAT ke WhatsApp via Fonnte
+        $res = FonnteService::sendMessage($phone, $bundledMsg, $token);
+
+        if (!$res['success']) {
+            $errReason = $res['message'] ?? 'Gagal mengirim pesan via Fonnte';
+            Log::warning("Bot Auto-Notify bundled message failed: {$errReason}");
+            $deviceHealth = FonnteService::checkDeviceStatus($token);
+            return [
+                'success'        => false,
+                'message'        => $errReason,
+                'device_health'  => $deviceHealth,
+                'notified_count' => 0,
+                'notified_kds'   => [],
+            ];
+        }
+
+        // Berhasil terkirim!
+        // Perbarui last_notified_at & reminder_count untuk SEMUA KD yang masuk dalam chat gabungan ini
+        // Sehingga CD spam pengingat berikutnya otomatis mengikuti waktu paling baru!
+        $notifiedKds = [];
+        $now = now();
+
+        $allIncluded = array_merge($unrepliedCandidates, $overdueCandidates);
+        foreach ($allIncluded as $c) {
+            $kdModel = $c['kingdom'];
+            $kdModel->last_notified_at = $now;
+            $kdModel->reminder_count   = ($kdModel->reminder_count ?? 0) + 1;
+            $kdModel->save();
+
+            $isUnreplied = ($c['category'] === 'unreplied');
+            $notifiedKds[] = [
+                'kd'             => $c['kd'],
+                'ready_count'    => $c['ready_count'],
+                'type'           => $isUnreplied ? ($c['is_new_ready'] ? 'initial_ready' : 'spam_unreplied') : ($c['is_new_overdue'] ? 'initial_overdue' : 'spam_overdue'),
+                'reminder_count' => $kdModel->reminder_count,
+                'delay_minutes'  => $isUnreplied ? $c['mins_since_ready'] : $c['mins_overdue'],
+            ];
+        }
+
+        BotSetting::set('bot_last_bundled_sent_at', $now->toIso8601String());
+
         return [
-            'success' => empty($sendErrors),
-            'auto_enabled' => true,
+            'success'        => true,
+            'auto_enabled'   => true,
+            'bundled'        => true,
+            'message'        => 'Notifikasi gabungan 1 chat berhasil dikirim ke grup WhatsApp!',
             'notified_count' => count($notifiedKds),
-            'notified_kds' => $notifiedKds,
-            'errors' => $sendErrors,
-            'device_health' => $deviceHealth,
+            'notified_kds'   => $notifiedKds,
         ];
+    }
+
+    /**
+     * Format pesan WhatsApp Tunggal (Bundled Single Chat) untuk semua KD yang butuh perhatian.
+     * Menggabungkan KD Siap Panen (Belum Dibalas) dan KD Overdue dalam 1 pesan hemat token Fonnte.
+     */
+    protected static function buildBundledNotificationText(
+        array $unrepliedList,
+        array $overdueList,
+        int $spamUnrepliedInterval,
+        int $spamOverdueInterval,
+        int $maxWorkMinutes,
+        ?string $worker = null
+    ): string {
+        $nowStr = now()->setTimezone('Asia/Jakarta')->format('d M Y, H:i') . ' WIB';
+        $currentUrl = self::resolveDashboardUrl();
+
+        $hasUnreplied = !empty($unrepliedList);
+        $hasOverdue   = !empty($overdueList);
+
+        if ($hasUnreplied && $hasOverdue) {
+            $text = "🚨 *PANGGILAN PANEN & PERINGATAN OVERDUE* 🚨\n";
+        } elseif ($hasOverdue) {
+            $text = "🔥 *PERINGATAN OVERDUE: BELUM DICEKLIS SELESAI* 🔥\n";
+        } else {
+            $text = "🚨 *PANGGILAN PANEN FARM RoK (AUTO BOT)* 🚨\n";
+        }
+
+        $text .= "━━━━━━━━━━━━━━━━━\n";
+        $text .= "⏰ *Waktu:* {$nowStr}\n\n";
+
+        // 1. Bagian KD Siap Panen (Belum Dibalas)
+        if ($hasUnreplied) {
+            $countU = count($unrepliedList);
+            $text .= "🟢 *SIAP PANEN (BELUM DIBALAS) — {$countU} KD:*\n";
+
+            foreach ($unrepliedList as $item) {
+                $kd = $item['kd'];
+                $readyCount = $item['ready_count'];
+                $cdHours = $item['cooldown_hours'];
+                $cdStr = ((float)$cdHours == (int)$cdHours) ? (int)$cdHours : $cdHours;
+                $minsReady = $item['mins_since_ready'];
+                $isNew = $item['is_new_ready'];
+
+                if ($isNew || $minsReady <= 2) {
+                    $statusStr = "✨ Baru Saja Siap";
+                } else {
+                    $statusStr = "⏳ Menunggu Balasan: {$minsReady} Menit";
+                }
+
+                $text .= "• *KD #{$kd}*: {$readyCount} Char Siap ({$statusStr})\n";
+            }
+            $text .= "\n";
+        }
+
+        // 2. Bagian KD Overdue (Lewat batas waktu pengerjaan)
+        if ($hasOverdue) {
+            $countO = count($overdueList);
+            $text .= "🔥 *OVERDUE (> {$maxWorkMinutes}m BELUM SELESAI) — {$countO} KD:*\n";
+
+            foreach ($overdueList as $item) {
+                $kd = $item['kd'];
+                $readyCount = $item['ready_count'];
+                $minsOverdue = $item['mins_overdue'];
+                $repliedBy = $item['replied_by'] ?: 'Anggota Tim';
+                $isNew = $item['is_new_overdue'];
+
+                if ($isNew || $minsOverdue <= 2) {
+                    $statusStr = "⚠️ Baru Lewat Batas {$maxWorkMinutes} Menit";
+                } else {
+                    $statusStr = "🚨 Terlambat: {$minsOverdue} Menit";
+                }
+
+                $text .= "• *KD #{$kd}*: {$readyCount} Char ({$statusStr} | Dibalas {$repliedBy})\n";
+            }
+            $text .= "\n";
+        }
+
+        $text .= "━━━━━━━━━━━━━━━━━\n";
+        $text .= "🔗 *Buka Dashboard:* {$currentUrl}\n";
+
+        if ($hasUnreplied && $hasOverdue) {
+            $text .= "💬 _Ketik balasan (misal: *otw*) untuk KD siap panen, dan segera ceklis selesai di web untuk KD overdue!_ 🌾🚜\n";
+        } elseif ($hasOverdue) {
+            $text .= "💬 _Segera ceklis selesai panen di dashboard agar bot berhenti spam tiap {$spamOverdueInterval} menit!_ 🚜🌾\n";
+        } else {
+            $firstKd = $unrepliedList[0]['kd'] ?? '';
+            $text .= "💬 _Ketik balasan di WA (contoh: *otw* atau *otw {$firstKd}*) agar bot tidak spam tiap {$spamUnrepliedInterval} menit!_ 🌾🚜\n";
+        }
+
+        $text .= "@all";
+
+        return $text;
     }
 
     // Format pesan: Notif Siap Panen Pertama atau Spam jika belum dibalas

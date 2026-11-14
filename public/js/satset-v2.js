@@ -1073,6 +1073,11 @@
                             syncQuickBtns('.btn-quick-overdue', data.spam_overdue_interval);
                         }
 
+                        const checkQuiet = document.getElementById('checkQuietHours');
+                        if (checkQuiet && typeof data.quiet_hours_enabled !== 'undefined') {
+                            checkQuiet.checked = !!data.quiet_hours_enabled;
+                        }
+
                         if (data.target_phone) {
                             localStorage.setItem('rok_wa_phone', data.target_phone);
                         }
@@ -1139,9 +1144,11 @@
                     const tokenVal = inputToken ? inputToken.value.trim() : '';
                     const phoneVal = inputPhone ? inputPhone.value.trim() : '';
                     const isAutoVal = checkAuto ? checkAuto.checked : true;
-                    const unrepliedVal = inputUnreplied ? parseInt(inputUnreplied.value, 10) : 15;
+                    const unrepliedVal = inputUnreplied ? parseInt(inputUnreplied.value, 10) : 30;
                     const maxWorkVal = inputMaxWork ? parseInt(inputMaxWork.value, 10) : 30;
-                    const overdueVal = inputOverdue ? parseInt(inputOverdue.value, 10) : 5;
+                    const overdueVal = inputOverdue ? parseInt(inputOverdue.value, 10) : 15;
+                    const checkQuiet = document.getElementById('checkQuietHours');
+                    const quietVal = checkQuiet ? checkQuiet.checked : true;
 
                     btnSave.disabled = true;
                     btnSave.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Menyimpan...';
@@ -1160,7 +1167,8 @@
                                 is_auto_notify: isAutoVal,
                                 spam_unreplied_interval: unrepliedVal,
                                 max_work_minutes: maxWorkVal,
-                                spam_overdue_interval: overdueVal
+                                spam_overdue_interval: overdueVal,
+                                quiet_hours_enabled: quietVal
                             })
                         });
                         const data = await res.json();
@@ -1326,15 +1334,19 @@
                 });
                 const data = await res.json();
                 if (data.success && data.notified_count > 0) {
-                    data.notified_kds.forEach(item => {
-                        if (item.type === 'spam_10m_unreplied' || item.type === 'spam_5m_unreplied') {
-                            showSatsetToast(`⚠️ <b>[Bot WA Fonnte]</b> Spam 5 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (${item.ready_count} char) karena belum dibalas!`, 'warning');
-                        } else if (item.type === 'spam_5m_overdue') {
-                            showSatsetToast(`🔥 <b>[Bot WA Fonnte]</b> Spam Overdue 5 Menit #${item.reminder_count} terkirim untuk KD #${item.kd} (> 30m belum diceklis)!`, 'danger');
-                        } else {
-                            showSatsetToast(`🤖 <b>[Bot WA Fonnte]</b> Pengingat KD #${item.kd} (${item.ready_count} char siap) otomatis terkirim ke WhatsApp!`, 'success');
-                        }
-                    });
+                    if (data.bundled) {
+                        showSatsetToast(`🤖 <b>[Bot WA Fonnte]</b> Chat pengingat gabungan (${data.notified_count} KD) berhasil dikirim ke grup WhatsApp!`, 'success');
+                    } else {
+                        data.notified_kds.forEach(item => {
+                            if (item.type === 'spam_10m_unreplied' || item.type === 'spam_5m_unreplied' || item.type === 'spam_unreplied') {
+                                showSatsetToast(`⚠️ <b>[Bot WA Fonnte]</b> Spam Pengingat #${item.reminder_count} terkirim untuk KD #${item.kd} (${item.ready_count} char) karena belum dibalas!`, 'warning');
+                            } else if (item.type === 'spam_5m_overdue' || item.type === 'spam_overdue') {
+                                showSatsetToast(`🔥 <b>[Bot WA Fonnte]</b> Spam Overdue #${item.reminder_count} terkirim untuk KD #${item.kd} (> 30m belum diceklis)!`, 'danger');
+                            } else {
+                                showSatsetToast(`🤖 <b>[Bot WA Fonnte]</b> Pengingat KD #${item.kd} (${item.ready_count} char siap) otomatis terkirim ke WhatsApp!`, 'success');
+                            }
+                        });
+                    }
                 }
             } catch (e) {
                 // Background check, abaikan jika offline
